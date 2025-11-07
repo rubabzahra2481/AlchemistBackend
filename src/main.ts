@@ -16,8 +16,17 @@ async function bootstrap() {
   // Serve static files
   app.useStaticAssets(join(__dirname, '..', 'public'));
 
-  // Enable CORS
-  app.enableCors();
+  // Enable CORS - Allow frontend to communicate with backend
+  app.enableCors({
+    origin: [
+      'http://localhost:8000',
+      'http://192.168.1.79:8000',
+      'https://main.d3970mma5pzr9g.amplifyapp.com',
+      /\.amplifyapp\.com$/ // Allow any Amplify domain
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+  });
 
   // Enable validation
   app.useGlobalPipes(

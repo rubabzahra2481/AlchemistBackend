@@ -70,27 +70,27 @@ export class AdviceGeneratorService {
         }
       } catch (jsonError) {
         // Fallback: Not JSON - try old format with RESPONSE:/REASONING: markers
-        const hasResponseMarker = fullResponse.includes('RESPONSE:');
-        const hasReasoningMarker = fullResponse.includes('REASONING:');
-        
-        if (hasResponseMarker) {
-          const responseMatch = fullResponse.match(/RESPONSE:\s*(.+?)(?:\s+REASONING:|$)/s);
-          if (responseMatch && responseMatch[1]) {
-            cleanResponse = responseMatch[1].trim();
-            if (hasReasoningMarker) {
-              const reasoningMatch = fullResponse.match(/REASONING:\s*(.+)/s);
-              if (reasoningMatch) {
-                extractedReasoning = reasoningMatch[1].trim();
-              }
+      const hasResponseMarker = fullResponse.includes('RESPONSE:');
+      const hasReasoningMarker = fullResponse.includes('REASONING:');
+      
+      if (hasResponseMarker) {
+        const responseMatch = fullResponse.match(/RESPONSE:\s*(.+?)(?:\s+REASONING:|$)/s);
+        if (responseMatch && responseMatch[1]) {
+          cleanResponse = responseMatch[1].trim();
+          if (hasReasoningMarker) {
+            const reasoningMatch = fullResponse.match(/REASONING:\s*(.+)/s);
+            if (reasoningMatch) {
+              extractedReasoning = reasoningMatch[1].trim();
             }
           }
+        }
         } else if (hasReasoningMarker) {
-          const parts = fullResponse.split(/\s+REASONING:\s*/);
-          cleanResponse = parts[0].trim();
+        const parts = fullResponse.split(/\s+REASONING:\s*/);
+        cleanResponse = parts[0].trim();
           extractedReasoning = parts[1] ? parts[1].trim() : 'LLM did not provide structured reasoning';
         } else {
           // Last resort: use raw response
-          cleanResponse = fullResponse.trim();
+        cleanResponse = fullResponse.trim();
           extractedReasoning = 'LLM did not follow the expected format - reasoning unavailable';
         }
       }
