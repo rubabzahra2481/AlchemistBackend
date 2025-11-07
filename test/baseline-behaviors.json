@@ -1,0 +1,94 @@
+{
+  "description": "Baseline behaviors that MUST continue working - these are regression tests",
+  "version": "1.0",
+  "lastUpdated": "2025-10-19",
+  "tests": [
+    {
+      "category": "greetings",
+      "input": "hey",
+      "shouldContain": ["Hey", "Hi", "Hello"],
+      "mustNOTcontain": ["score", "quotient", "analysis", "DASS", "RSE"],
+      "maxLength": 60,
+      "expectedBehavior": "Should respond with a brief, friendly greeting and ask how they can help",
+      "description": "Simple greeting should be brief and friendly"
+    },
+    {
+      "category": "greetings",
+      "input": "hi",
+      "maxLength": 60,
+      "mustNOTcontain": ["score", "quotient"]
+    },
+    {
+      "category": "greetings",
+      "input": "hello",
+      "maxLength": 60,
+      "mustNOTcontain": ["score", "quotient"]
+    },
+    {
+      "category": "name_introduction",
+      "input": "im sarah",
+      "mustContain": ["Nice to meet you", "Sarah"],
+      "mustNOTcontain": ["score", "analysis"],
+      "maxLength": 80,
+      "description": "Name introduction should acknowledge name and be brief"
+    },
+    {
+      "category": "name_introduction",
+      "input": "im john",
+      "mustContain": ["Nice to meet you", "John"],
+      "maxLength": 80
+    },
+    {
+      "category": "name_introduction",
+      "input": "my name is alice",
+      "mustContain": ["Alice"],
+      "maxLength": 80
+    },
+    {
+      "category": "conversation_ending",
+      "input": "thats all",
+      "mustContain": ["Take care", "care"],
+      "mustNOTcontain": ["Tell me more", "Go on"],
+      "maxLength": 50,
+      "description": "Conversation ending should say goodbye, not continue"
+    },
+    {
+      "category": "conversation_ending",
+      "input": "bye",
+      "mustContain": ["care", "bye"],
+      "maxLength": 50
+    },
+    {
+      "category": "critical_bug_prevention",
+      "input": "I'm feeling overwhelmed and stressed",
+      "mustNOTcontain": ["Nice to meet you, Feeling", "Nice to meet you, Overwhelmed"],
+      "description": "CRITICAL: Must NOT parse emotions as names"
+    },
+    {
+      "category": "critical_bug_prevention",
+      "input": "I'm trying to find a solution",
+      "mustNOTcontain": ["Nice to meet you, Trying"],
+      "description": "CRITICAL: Must NOT parse actions as names"
+    },
+    {
+      "category": "gives_advice_not_questions",
+      "input": "I dont know first step in business",
+      "mustNOTcontain": ["Have you tried", "Have you considered", "Have you identified"],
+      "mustContain": ["1.", "2."],
+      "description": "Should give specific steps, not ask 'have you' questions"
+    },
+    {
+      "category": "no_jargon",
+      "input": "I feel like a failure",
+      "mustNOTcontain": ["score", "percentile", "DASS", "RSE", "Big Five", "trait", "quotient"],
+      "description": "CRITICAL: Never use psychology jargon with users"
+    },
+    {
+      "category": "conciseness",
+      "input": "I need help with stress",
+      "maxLength": 400,
+      "description": "Responses should be concise, under 400 characters"
+    }
+  ]
+}
+
