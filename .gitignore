@@ -23,6 +23,8 @@ reasoning.log
 /.nyc_output
 test-*.json
 *-test-result.json
+test/
+/test
 
 # IDEs and editors
 /.idea
