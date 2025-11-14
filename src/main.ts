@@ -22,7 +22,8 @@ async function bootstrap() {
       'http://localhost:8000',
       'http://192.168.1.79:8000',
       'https://main.d3970mma5pzr9g.amplifyapp.com',
-      /\.amplifyapp\.com$/ // Allow any Amplify domain
+      /\.amplifyapp\.com$/, // Allow any Amplify domain
+      /\.elasticbeanstalk\.com$/ // Allow Elastic Beanstalk domains
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,

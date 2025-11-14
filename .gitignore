@@ -54,4 +54,7 @@ test/
 # Docker
 docker-compose.override.yml
 
+# AWS Elastic Beanstalk extensions (commented out - not needed for now)
+.ebextensions
+
 
