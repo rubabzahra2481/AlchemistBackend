@@ -20,12 +20,12 @@ export class ClaudeProvider implements ILLMProvider {
   async generateResponse(
     model: string,
     messages: any[],
-    options: LLMOptions
+    options: LLMOptions,
   ): Promise<LLMResponse> {
     try {
       // Convert OpenAI format to Claude format
       const claudeMessages = this.convertToClaudeFormat(messages);
-      
+
       const response = await this.client.messages.create({
         model: model,
         max_tokens: options.max_tokens || 4000,
@@ -45,17 +45,9 @@ export class ClaudeProvider implements ILLMProvider {
   }
 
   private convertToClaudeFormat(messages: any[]): any[] {
-    return messages.map(msg => ({
+    return messages.map((msg) => ({
       role: msg.role === 'assistant' ? 'assistant' : 'user',
-      content: msg.content
+      content: msg.content,
     }));
   }
 }
-
-
-
-
-
-
-
-

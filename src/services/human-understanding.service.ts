@@ -26,13 +26,13 @@ export interface HumanProfile {
     narcissism: 'low' | 'moderate' | 'high';
     psychopathy: 'low' | 'moderate' | 'high';
   };
-  
+
   // What they actually need
   coreNeeds: string[];
-  
+
   // How to talk to them
   bestApproach: string;
-  
+
   // Conversation context
   topic: string;
   emotionalTone: 'distressed' | 'neutral' | 'hopeful' | 'confused';
@@ -48,17 +48,12 @@ export class HumanUnderstandingService {
    */
   async understandHuman(
     currentMessage: string,
-    conversationHistory: Array<{role: string, content: string}>
+    conversationHistory: Array<{ role: string; content: string }>,
   ): Promise<HumanProfile> {
-    const historyText = conversationHistory
-      .map(m => `${m.role}: ${m.content}`)
-      .join('\n');
+    const historyText = conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n');
 
     // Use RAG to get deep psychological understanding
-    const understanding = await this.ragService.getDeepUnderstanding(
-      historyText,
-      currentMessage
-    );
+    const understanding = await this.ragService.getDeepUnderstanding(historyText, currentMessage);
 
     // Add conversation context analysis
     const context = this.analyzeConversationContext(currentMessage);
@@ -71,7 +66,7 @@ export class HumanUnderstandingService {
       coreNeeds: understanding.coreNeeds,
       bestApproach: understanding.bestApproach,
       topic: context.topic,
-      emotionalTone: context.emotionalTone
+      emotionalTone: context.emotionalTone,
     };
   }
 
@@ -79,11 +74,11 @@ export class HumanUnderstandingService {
    * Analyze conversation context
    */
   private analyzeConversationContext(message: string): {
-    topic: string,
-    emotionalTone: 'distressed' | 'neutral' | 'hopeful' | 'confused'
+    topic: string;
+    emotionalTone: 'distressed' | 'neutral' | 'hopeful' | 'confused';
   } {
     const lower = message.toLowerCase();
-    
+
     // Detect topic
     let topic = 'general';
     if (lower.match(/career|job|work/)) topic = 'career';
@@ -91,13 +86,13 @@ export class HumanUnderstandingService {
     else if (lower.match(/stress|anxious|worry|overwhelm/)) topic = 'stress';
     else if (lower.match(/learn|study|skill|improve/)) topic = 'learning';
     else if (lower.match(/goal|future|direction|purpose/)) topic = 'direction';
-    
+
     // Detect emotional tone
     let emotionalTone: 'distressed' | 'neutral' | 'hopeful' | 'confused' = 'neutral';
     if (lower.match(/help|stuck|don't know|lost|confused/)) emotionalTone = 'confused';
     else if (lower.match(/stress|anxious|overwhelm|panic|scared/)) emotionalTone = 'distressed';
     else if (lower.match(/want to|hope|try|improve|better/)) emotionalTone = 'hopeful';
-    
+
     return { topic, emotionalTone };
   }
 
@@ -113,12 +108,11 @@ export class HumanUnderstandingService {
     if (mentalState.stress !== 'none' || mentalState.anxiety !== 'none') {
       opening = 'I can hear that this is weighing on you. ';
     } else if (profile.emotionalTone === 'confused') {
-      opening = 'It sounds like you\'re at a crossroads. ';
+      opening = "It sounds like you're at a crossroads. ";
     } else if (selfEsteem.level === 'low') {
-      opening = 'I hear you, and I want you to know that what you\'re feeling is valid. ';
+      opening = "I hear you, and I want you to know that what you're feeling is valid. ";
     }
 
     return opening;
   }
 }
-

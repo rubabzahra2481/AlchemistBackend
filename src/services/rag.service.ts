@@ -17,7 +17,7 @@ export class RagService implements OnModuleInit {
     if (apiKey) {
       this.openai = new OpenAI({ apiKey });
     }
-    
+
     // Initialize ChromaDB (may fail if not installed)
     try {
       this.client = new ChromaClient();
@@ -52,12 +52,12 @@ export class RagService implements OnModuleInit {
       try {
         this.collection = await this.client.getOrCreateCollection({
           name: 'psychology_knowledge_base',
-          metadata: { description: 'Validated psychological constructs and research' }
+          metadata: { description: 'Validated psychological constructs and research' },
         });
       } catch {
         this.collection = await this.client.createCollection({
           name: 'psychology_knowledge_base',
-          metadata: { description: 'Validated psychological constructs and research' }
+          metadata: { description: 'Validated psychological constructs and research' },
         });
       }
 
@@ -83,21 +83,21 @@ export class RagService implements OnModuleInit {
    */
   private async embedKBFiles() {
     const kbPath = path.join(process.cwd(), 'KB');
-    
+
     if (!fs.existsSync(kbPath)) {
       console.log('KB folder not found, skipping embedding');
       return;
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.txt'));
-    
+    const files = fs.readdirSync(kbPath).filter((f) => f.endsWith('.txt'));
+
     for (const file of files) {
       const filePath = path.join(kbPath, file);
       const content = fs.readFileSync(filePath, 'utf-8');
-      
+
       // Chunk the content
       const chunks = this.chunkText(content, file);
-      
+
       // Embed chunks
       if (chunks.length > 0 && this.openai) {
         await this.embedChunks(chunks, file);
@@ -108,27 +108,27 @@ export class RagService implements OnModuleInit {
   /**
    * Chunk text into semantic sections
    */
-  private chunkText(content: string, source: string): Array<{text: string, metadata: any}> {
-    const chunks: Array<{text: string, metadata: any}> = [];
-    
+  private chunkText(content: string, source: string): Array<{ text: string; metadata: any }> {
+    const chunks: Array<{ text: string; metadata: any }> = [];
+
     // Split by section markers
     const sections = content.split(/={50,}/);
-    
+
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i].trim();
       if (section.length < 50) continue; // Skip too short sections
-      
+
       // Further split long sections into paragraphs
       if (section.length > 2000) {
         const paragraphs = section.split(/\n\n+/);
         let currentChunk = '';
-        
+
         for (const para of paragraphs) {
           if ((currentChunk + para).length > 1500) {
             if (currentChunk) {
               chunks.push({
                 text: currentChunk.trim(),
-                metadata: { source, section: i, type: 'paragraph_group' }
+                metadata: { source, section: i, type: 'paragraph_group' },
               });
             }
             currentChunk = para;
@@ -136,48 +136,48 @@ export class RagService implements OnModuleInit {
             currentChunk += '\n\n' + para;
           }
         }
-        
+
         if (currentChunk) {
           chunks.push({
             text: currentChunk.trim(),
-            metadata: { source, section: i, type: 'paragraph_group' }
+            metadata: { source, section: i, type: 'paragraph_group' },
           });
         }
       } else {
         chunks.push({
           text: section,
-          metadata: { source, section: i, type: 'section' }
+          metadata: { source, section: i, type: 'section' },
         });
       }
     }
-    
+
     return chunks;
   }
 
   /**
    * Embed chunks and store in vector DB
    */
-  private async embedChunks(chunks: Array<{text: string, metadata: any}>, source: string) {
+  private async embedChunks(chunks: Array<{ text: string; metadata: any }>, source: string) {
     const batchSize = 10;
-    
+
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
-      
+
       try {
         // Generate embeddings
         const response = await this.openai.embeddings.create({
           model: 'text-embedding-3-small',
-          input: batch.map(c => c.text)
+          input: batch.map((c) => c.text),
         });
-        
+
         // Store in ChromaDB
         await this.collection.add({
           ids: batch.map((_, idx) => `${source}_chunk_${i + idx}`),
-          documents: batch.map(c => c.text),
-          metadatas: batch.map(c => c.metadata),
-          embeddings: response.data.map(e => e.embedding)
+          documents: batch.map((c) => c.text),
+          metadatas: batch.map((c) => c.metadata),
+          embeddings: response.data.map((e) => e.embedding),
         });
-        
+
         console.log(`Embedded ${batch.length} chunks from ${source}`);
       } catch (error) {
         console.error(`Error embedding batch from ${source}:`, error);
@@ -197,13 +197,13 @@ export class RagService implements OnModuleInit {
       // Generate query embedding
       const queryEmbedding = await this.openai.embeddings.create({
         model: 'text-embedding-3-small',
-        input: query
+        input: query,
       });
 
       // Search vector DB
       const results = await this.collection.query({
         queryEmbeddings: [queryEmbedding.data[0].embedding],
-        nResults: topK
+        nResults: topK,
       });
 
       return (results.documents[0] || []).filter((doc): doc is string => doc !== null);
@@ -219,14 +219,14 @@ export class RagService implements OnModuleInit {
    */
   async getDeepUnderstanding(
     conversationHistory: string,
-    currentMessage: string
+    currentMessage: string,
   ): Promise<{
-    personality: any,
-    mentalState: any,
-    selfConcept: any,
-    interpersonalStyle: any,
-    coreNeeds: string[],
-    bestApproach: string
+    personality: any;
+    mentalState: any;
+    selfConcept: any;
+    interpersonalStyle: any;
+    coreNeeds: string[];
+    bestApproach: string;
   }> {
     if (!this.isInitialized || !this.openai) {
       console.log('Using fallback understanding (RAG not initialized)');
@@ -236,28 +236,21 @@ export class RagService implements OnModuleInit {
     const fullContext = `${conversationHistory}\n\nCurrent: ${currentMessage}`;
 
     // Search for relevant psychological patterns
-    const [
-      personalityContext,
-      mentalHealthContext,
-      selfEsteemContext,
-      interpersonalContext
-    ] = await Promise.all([
-      this.searchKnowledge(`Big Five personality patterns: ${fullContext}`, 2),
-      this.searchKnowledge(`DASS depression anxiety stress patterns: ${fullContext}`, 2),
-      this.searchKnowledge(`Self-esteem RSE patterns: ${fullContext}`, 2),
-      this.searchKnowledge(`Dark Triad interpersonal patterns: ${fullContext}`, 2)
-    ]);
+    const [personalityContext, mentalHealthContext, selfEsteemContext, interpersonalContext] =
+      await Promise.all([
+        this.searchKnowledge(`Big Five personality patterns: ${fullContext}`, 2),
+        this.searchKnowledge(`DASS depression anxiety stress patterns: ${fullContext}`, 2),
+        this.searchKnowledge(`Self-esteem RSE patterns: ${fullContext}`, 2),
+        this.searchKnowledge(`Dark Triad interpersonal patterns: ${fullContext}`, 2),
+      ]);
 
     // Build understanding (GPT analyzes silently)
-    const understanding = await this.analyzeWithContext(
-      currentMessage,
-      {
-        personality: personalityContext,
-        mentalHealth: mentalHealthContext,
-        selfEsteem: selfEsteemContext,
-        interpersonal: interpersonalContext
-      }
-    );
+    const understanding = await this.analyzeWithContext(currentMessage, {
+      personality: personalityContext,
+      mentalHealth: mentalHealthContext,
+      selfEsteem: selfEsteemContext,
+      interpersonal: interpersonalContext,
+    });
 
     return understanding;
   }
@@ -268,11 +261,11 @@ export class RagService implements OnModuleInit {
   private async analyzeWithContext(
     message: string,
     contexts: {
-      personality: string[],
-      mentalHealth: string[],
-      selfEsteem: string[],
-      interpersonal: string[]
-    }
+      personality: string[];
+      mentalHealth: string[];
+      selfEsteem: string[];
+      interpersonal: string[];
+    },
   ): Promise<any> {
     if (!this.openai) {
       return this.getFallbackUnderstanding(message);
@@ -332,7 +325,7 @@ Return JSON only:
         model: 'gpt-3.5-turbo',
         messages: [{ role: 'user', content: prompt }],
         response_format: { type: 'json_object' },
-        temperature: 0.3
+        temperature: 0.3,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -348,7 +341,7 @@ Return JSON only:
    */
   private getFallbackUnderstanding(message: string): any {
     const lower = message.toLowerCase();
-    
+
     // Detect personality patterns
     const personality = {
       openness: this.detectOpenness(lower),
@@ -356,7 +349,7 @@ Return JSON only:
       extraversion: this.detectExtraversion(lower),
       agreeableness: this.detectAgreeableness(lower),
       neuroticism: this.detectNeuroticism(lower),
-      confidence: 'medium' as const
+      confidence: 'medium' as const,
     };
 
     // Detect mental state
@@ -364,20 +357,20 @@ Return JSON only:
       depression: this.detectDepression(lower),
       anxiety: this.detectAnxiety(lower),
       stress: this.detectStress(lower),
-      indicators: this.getIndicators(lower)
+      indicators: this.getIndicators(lower),
     };
 
     // Detect self-esteem
     const selfConcept = {
       level: this.detectSelfEsteem(lower),
-      specificConcerns: this.getSelfEsteemConcerns(lower)
+      specificConcerns: this.getSelfEsteemConcerns(lower),
     };
 
     // Detect interpersonal style
     const interpersonalStyle = {
       machiavellianism: 'low' as const,
       narcissism: 'low' as const,
-      psychopathy: 'low' as const
+      psychopathy: 'low' as const,
     };
 
     // Identify core needs
@@ -392,7 +385,7 @@ Return JSON only:
       selfConcept,
       interpersonalStyle,
       coreNeeds,
-      bestApproach
+      bestApproach,
     };
   }
 
@@ -435,10 +428,10 @@ Return JSON only:
       /hopeless|no.*point/,
       /can't.*feel/,
       /don't.*care.*anymore/,
-      /just.*exist/
+      /just.*exist/,
     ];
-    
-    const matches = indicators.filter(pattern => pattern.test(message)).length;
+
+    const matches = indicators.filter((pattern) => pattern.test(message)).length;
     if (matches >= 3) return 'severe';
     if (matches >= 2) return 'moderate';
     if (matches >= 1 || message.match(/sad|down|depressed/)) return 'mild';
@@ -477,13 +470,13 @@ Return JSON only:
       /not.*good.*enough/,
       /can't.*do.*anything/,
       /hate.*myself/,
-      /no.*good.*at/
+      /no.*good.*at/,
     ];
-    
-    const matches = lowIndicators.filter(pattern => pattern.test(message)).length;
+
+    const matches = lowIndicators.filter((pattern) => pattern.test(message)).length;
     if (matches >= 2) return 'low';
     if (matches >= 1) return 'moderate';
-    
+
     if (message.match(/confident|proud|capable|good.*at/)) return 'high';
     return 'moderate';
   }
@@ -499,28 +492,28 @@ Return JSON only:
   // Core needs identification
   private identifyCoreNeeds(message: string, mentalState: any, selfConcept: any): string[] {
     const needs: string[] = [];
-    
+
     // Based on mental state
     if (mentalState.stress !== 'none') needs.push('stress relief');
     if (mentalState.depression !== 'none') needs.push('hope and meaning');
     if (mentalState.anxiety !== 'none') needs.push('calming and safety');
-    
+
     // Based on self-esteem
     if (selfConcept.level === 'low') needs.push('validation and self-compassion');
-    
+
     // Based on message content
     if (message.match(/stuck|don't know|confused/)) needs.push('clarity and direction');
     if (message.match(/alone|lonely|friends/)) needs.push('connection');
     if (message.match(/career|job|work/)) needs.push('career guidance');
     if (message.match(/should I|what do I/)) needs.push('decision support');
-    
+
     return needs.length > 0 ? needs : ['support'];
   }
 
   // Best approach determination
   private determineBestApproach(mentalState: any, selfConcept: any, personality: any): string {
     const approaches: string[] = [];
-    
+
     if (mentalState.depression === 'severe' || mentalState.depression === 'moderate') {
       approaches.push('gentle and validating');
     }
@@ -536,8 +529,7 @@ Return JSON only:
     if (personality.extraversion === 'low') {
       approaches.push('respect need for solitude');
     }
-    
+
     return approaches.length > 0 ? approaches.join(', ') : 'empathetic and practical';
   }
 }
-

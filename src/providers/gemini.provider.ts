@@ -18,21 +18,21 @@ export class GeminiProvider implements ILLMProvider {
   async generateResponse(
     model: string,
     messages: any[],
-    options: LLMOptions
+    options: LLMOptions,
   ): Promise<LLMResponse> {
     try {
-      const genModel = this.genAI.getGenerativeModel({ 
+      const genModel = this.genAI.getGenerativeModel({
         model: model,
         generationConfig: {
           temperature: options.temperature || 0.7,
           maxOutputTokens: options.max_tokens || 4000,
           topP: options.top_p || 0.95,
-        }
+        },
       });
-      
+
       // Convert messages to Gemini format
       const prompt = this.convertToGeminiFormat(messages);
-      
+
       const result = await genModel.generateContent(prompt);
       const response = await result.response;
       const text = response.text();
@@ -48,14 +48,6 @@ export class GeminiProvider implements ILLMProvider {
   }
 
   private convertToGeminiFormat(messages: any[]): string {
-    return messages.map(msg => `${msg.role}: ${msg.content}`).join('\n');
+    return messages.map((msg) => `${msg.role}: ${msg.content}`).join('\n');
   }
 }
-
-
-
-
-
-
-
-

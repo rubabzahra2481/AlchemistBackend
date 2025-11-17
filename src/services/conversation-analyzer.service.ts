@@ -15,12 +15,10 @@ export class ConversationAnalyzerService {
   /**
    * Analyzes conversation patterns across multiple messages
    */
-  analyzeConversation(
-    messages: Array<{ role: string; content: string }>
-  ): ConversationInsights {
+  analyzeConversation(messages: Array<{ role: string; content: string }>): ConversationInsights {
     const userMessages = messages
-      .filter(m => m.role === 'user')
-      .map(m => m.content.toLowerCase());
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content.toLowerCase());
 
     return {
       recurringThemes: this.findRecurringThemes(userMessages),
@@ -29,7 +27,7 @@ export class ConversationAnalyzerService {
       hiddenConcerns: this.detectHiddenConcerns(userMessages),
       conversationDepth: this.assessDepth(userMessages),
       trustLevel: this.assessTrust(userMessages),
-      recommendedApproach: this.determineApproach(userMessages)
+      recommendedApproach: this.determineApproach(userMessages),
     };
   }
 
@@ -47,21 +45,23 @@ export class ConversationAnalyzerService {
     const startQuitIndicators = [
       /start.*quit|quit.*after|gave up|stopped.*after/,
       /tried.*stop|began.*quit|abandon/,
-      /couldn't.*finish|didn't.*complete|never.*finish/
+      /couldn't.*finish|didn't.*complete|never.*finish/,
     ];
-    const startQuitCount = startQuitIndicators.filter(pattern => pattern.test(fullText)).length;
-    
+    const startQuitCount = startQuitIndicators.filter((pattern) => pattern.test(fullText)).length;
+
     // Also check for multiple specific examples (business, gym, guitar, etc.)
     const specificExamples = [
       /business|startup|company/,
       /gym|exercise|workout|fitness/,
       /guitar|piano|music|instrument/,
       /course|class|learning|study/,
-      /hobby|project/
-    ].filter(pattern => pattern.test(fullText));
+      /hobby|project/,
+    ].filter((pattern) => pattern.test(fullText));
 
     if (startQuitCount >= 2 || (startQuitCount >= 1 && specificExamples.length >= 2)) {
-      patterns.push('Start-Quit Pattern: Repeatedly starts things but struggles to complete them. This may indicate fear of failure, low self-efficacy, or underlying avoidance.');
+      patterns.push(
+        'Start-Quit Pattern: Repeatedly starts things but struggles to complete them. This may indicate fear of failure, low self-efficacy, or underlying avoidance.',
+      );
     }
 
     // Pattern 2: Procrastination / Avoidance
@@ -69,11 +69,13 @@ export class ConversationAnalyzerService {
       /procrastinat/,
       /can't.*focus|unable.*concentrate/,
       /avoid|put.*off|delay/,
-      /distract/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /distract/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (procrastinationCount >= 2) {
-      patterns.push('Chronic Procrastination: Persistent difficulty with task initiation or focus. May stem from anxiety, perfectionism, or task aversion.');
+      patterns.push(
+        'Chronic Procrastination: Persistent difficulty with task initiation or focus. May stem from anxiety, perfectionism, or task aversion.',
+      );
     }
 
     // Pattern 3: Self-Criticism / Low Self-Worth
@@ -81,11 +83,13 @@ export class ConversationAnalyzerService {
       /don't deserve|not good enough|everyone.*better/,
       /failure|useless|worthless/,
       /imposter|fraud|fake/,
-      /should.*better|not.*smart/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /should.*better|not.*smart/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (selfCriticismCount >= 2) {
-      patterns.push('Persistent Self-Criticism: Recurring negative self-evaluation. Indicates low self-esteem or imposter syndrome.');
+      patterns.push(
+        'Persistent Self-Criticism: Recurring negative self-evaluation. Indicates low self-esteem or imposter syndrome.',
+      );
     }
 
     // Pattern 4: Feeling Trapped / Powerless
@@ -93,8 +97,8 @@ export class ConversationAnalyzerService {
       /stuck|trapped|can't escape/,
       /no choice|no control|powerless/,
       /dead inside|numb|empty/,
-      /robot|automaton|going through motions/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /robot|automaton|going through motions/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (trappedCount >= 2) {
       patterns.push('Feeling Trapped/Powerless: Sense of being stuck without control or agency.');
@@ -104,22 +108,26 @@ export class ConversationAnalyzerService {
     const indecisionCount = [
       /don't know.*do|can't decide|confused/,
       /too many.*options|overwhelmed.*choice/,
-      /what if.*wrong|scared.*decide/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /what if.*wrong|scared.*decide/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (indecisionCount >= 2) {
-      patterns.push('Decision Paralysis: Difficulty making decisions. May stem from perfectionism, fear of consequences, or information overload.');
+      patterns.push(
+        'Decision Paralysis: Difficulty making decisions. May stem from perfectionism, fear of consequences, or information overload.',
+      );
     }
 
     // Pattern 6: Seeking External Validation
     const validationCount = [
       /should I|is it okay|am I allowed/,
       /what.*think|do you think I/,
-      /permission|approval/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /permission|approval/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (validationCount >= 2) {
-      patterns.push('Seeking External Validation: Relies heavily on others\' opinions. May indicate low self-trust or people-pleasing tendencies.');
+      patterns.push(
+        "Seeking External Validation: Relies heavily on others' opinions. May indicate low self-trust or people-pleasing tendencies.",
+      );
     }
 
     return patterns;
@@ -130,15 +138,15 @@ export class ConversationAnalyzerService {
    */
   private findRecurringThemes(messages: string[]): string[] {
     const themes: Map<string, number> = new Map();
-    
+
     const themePatterns = {
-      'career': /career|job|work/,
-      'relationships': /relationship|friend|family|partner|people/,
-      'stress': /stress|overwhelm|pressure|burnout/,
+      career: /career|job|work/,
+      relationships: /relationship|friend|family|partner|people/,
+      stress: /stress|overwhelm|pressure|burnout/,
       'self-worth': /failure|useless|not good|inadequate/,
-      'anxiety': /worry|anxious|nervous|scared/,
-      'depression': /sad|empty|hopeless|nothing.*matters/,
-      'direction': /stuck|lost|don't know|confused|purpose/
+      anxiety: /worry|anxious|nervous|scared/,
+      depression: /sad|empty|hopeless|nothing.*matters/,
+      direction: /stuck|lost|don't know|confused|purpose/,
     };
 
     for (const message of messages) {
@@ -234,8 +242,8 @@ export class ConversationAnalyzerService {
       /I'm scared/,
       /I don't know/,
       /help me/,
-      /I can't/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /I can't/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (avgLength > 30 && vulnerabilityMarkers >= 3) return 'deep';
     if (avgLength > 15 && vulnerabilityMarkers >= 1) return 'moderate';
@@ -259,8 +267,8 @@ export class ConversationAnalyzerService {
       /I'm scared/,
       /I struggle/,
       /I don't know/,
-      /please help/
-    ].filter(pattern => pattern.test(fullText)).length;
+      /please help/,
+    ].filter((pattern) => pattern.test(fullText)).length;
 
     if (trustMarkers >= 3) return 'trusting';
     if (trustMarkers >= 1) return 'opening';
@@ -287,9 +295,6 @@ export class ConversationAnalyzerService {
       approaches.push('gently challenge minimization');
     }
 
-    return approaches.length > 0 
-      ? approaches.join('; ') 
-      : 'empathetic and exploratory';
+    return approaches.length > 0 ? approaches.join('; ') : 'empathetic and exploratory';
   }
 }
-

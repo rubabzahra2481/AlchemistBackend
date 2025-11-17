@@ -44,4 +44,3 @@ export interface QuotientScore {
   confidence: number; // 0-1
   indicators: string[];
 }
-

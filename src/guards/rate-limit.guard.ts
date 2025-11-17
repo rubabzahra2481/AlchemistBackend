@@ -1,4 +1,10 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -13,34 +19,34 @@ export class RateLimitGuard implements CanActivate {
 
     // Get existing requests for this IP
     const userRequests = this.requests.get(ip) || [];
-    
+
     // Filter out old requests outside the window
-    const recentRequests = userRequests.filter(time => now - time < this.windowMs);
-    
+    const recentRequests = userRequests.filter((time) => now - time < this.windowMs);
+
     // Check if limit exceeded
     if (recentRequests.length >= this.maxRequests) {
       throw new HttpException(
         'Too many requests. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    
+
     // Add current request
     recentRequests.push(now);
     this.requests.set(ip, recentRequests);
-    
+
     // Cleanup old entries periodically
     if (Math.random() < 0.01) {
       this.cleanup();
     }
-    
+
     return true;
   }
 
   private cleanup() {
     const now = Date.now();
     for (const [ip, times] of this.requests.entries()) {
-      const recent = times.filter(time => now - time < this.windowMs);
+      const recent = times.filter((time) => now - time < this.windowMs);
       if (recent.length === 0) {
         this.requests.delete(ip);
       } else {
@@ -49,4 +55,3 @@ export class RateLimitGuard implements CanActivate {
     }
   }
 }
-

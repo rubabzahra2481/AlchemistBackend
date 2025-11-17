@@ -19,20 +19,20 @@ export class PersonalityAnalyzerService {
   analyzePersonality(
     message: string,
     sessionId: string,
-    conversationHistory: ConversationMessage[]
+    conversationHistory: ConversationMessage[],
   ): PersonalityAnalysis {
     const allMessages = conversationHistory
-      .filter(m => m.role === 'user')
-      .map(m => m.content)
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content)
       .join(' ');
 
     const combinedText = `${allMessages} ${message}`.toLowerCase();
-    
+
     const quotientScores: QuotientScore[] = [];
 
     // Analyze each quotient
     for (const quotient of QUOTIENTS_KNOWLEDGE_BASE) {
-      const pattern = ANALYSIS_PATTERNS.find(p => p.quotientId === quotient.id);
+      const pattern = ANALYSIS_PATTERNS.find((p) => p.quotientId === quotient.id);
       if (!pattern) continue;
 
       const score = this.calculateQuotientScore(combinedText, message, pattern, quotient);
@@ -43,32 +43,27 @@ export class PersonalityAnalyzerService {
     quotientScores.sort((a, b) => b.score - a.score);
 
     // Identify dominant quotients (top 3 with score > 40)
-    const dominantQuotients = quotientScores
-      .filter(q => q.score > 40)
-      .slice(0, 3);
+    const dominantQuotients = quotientScores.filter((q) => q.score > 40).slice(0, 3);
 
     // Identify quotients needing attention (bottom 3 with score < 30)
     const needsAttention = quotientScores
-      .filter(q => q.score < 30)
+      .filter((q) => q.score < 30)
       .slice(-3)
       .reverse();
 
     const overallInsights = this.generateOverallInsights(
       dominantQuotients,
       needsAttention,
-      quotientScores
+      quotientScores,
     );
 
-    const conversationContext = this.extractConversationContext(
-      message,
-      conversationHistory
-    );
+    const conversationContext = this.extractConversationContext(message, conversationHistory);
 
     return {
       dominantQuotients,
       needsAttention,
       overallInsights,
-      conversationContext
+      conversationContext,
     };
   }
 
@@ -79,7 +74,7 @@ export class PersonalityAnalyzerService {
     fullText: string,
     currentMessage: string,
     pattern: AnalysisPattern,
-    quotient: QuotientData
+    quotient: QuotientData,
   ): QuotientScore {
     let score = 50; // Base score
     let confidence = 0.5;
@@ -124,10 +119,7 @@ export class PersonalityAnalyzerService {
     }
 
     // Behavioral marker inference (weight: 25%)
-    const behavioralScore = this.assessBehavioralMarkers(
-      currentMessage,
-      pattern.behavioralMarkers
-    );
+    const behavioralScore = this.assessBehavioralMarkers(currentMessage, pattern.behavioralMarkers);
     score += behavioralScore;
     if (behavioralScore > 10) {
       confidence += 0.15;
@@ -135,10 +127,7 @@ export class PersonalityAnalyzerService {
     }
 
     // Check for characteristics alignment
-    const characteristicAlignment = this.checkCharacteristics(
-      currentMessage,
-      quotient
-    );
+    const characteristicAlignment = this.checkCharacteristics(currentMessage, quotient);
     if (characteristicAlignment.isHigh) {
       score += 10;
       indicators.push(`Shows high ${quotient.name} traits`);
@@ -156,7 +145,7 @@ export class PersonalityAnalyzerService {
       quotientName: quotient.fullName,
       score: Math.round(score),
       confidence: Math.round(confidence * 100) / 100,
-      indicators: indicators.slice(0, 3) // Top 3 indicators
+      indicators: indicators.slice(0, 3), // Top 3 indicators
     };
   }
 
@@ -181,7 +170,7 @@ export class PersonalityAnalyzerService {
    */
   private checkCharacteristics(
     message: string,
-    quotient: QuotientData
+    quotient: QuotientData,
   ): { isHigh: boolean; isLow: boolean } {
     const lowerMessage = message.toLowerCase();
     let highMatches = 0;
@@ -190,7 +179,7 @@ export class PersonalityAnalyzerService {
     // Check high characteristics
     for (const characteristic of quotient.characteristics.high) {
       const keywords = this.extractKeywords(characteristic);
-      if (keywords.some(kw => lowerMessage.includes(kw))) {
+      if (keywords.some((kw) => lowerMessage.includes(kw))) {
         highMatches++;
       }
     }
@@ -198,14 +187,14 @@ export class PersonalityAnalyzerService {
     // Check low characteristics
     for (const characteristic of quotient.characteristics.low) {
       const keywords = this.extractKeywords(characteristic);
-      if (keywords.some(kw => lowerMessage.includes(kw))) {
+      if (keywords.some((kw) => lowerMessage.includes(kw))) {
         lowMatches++;
       }
     }
 
     return {
       isHigh: highMatches > lowMatches && highMatches >= 2,
-      isLow: lowMatches > highMatches && lowMatches >= 2
+      isLow: lowMatches > highMatches && lowMatches >= 2,
     };
   }
 
@@ -213,10 +202,11 @@ export class PersonalityAnalyzerService {
    * Extracts keywords from a characteristic description
    */
   private extractKeywords(text: string): string[] {
-    const words = text.toLowerCase()
+    const words = text
+      .toLowerCase()
       .replace(/[^a-z\s]/g, '')
       .split(' ')
-      .filter(w => w.length > 4); // Only meaningful words
+      .filter((w) => w.length > 4); // Only meaningful words
     return words;
   }
 
@@ -226,28 +216,29 @@ export class PersonalityAnalyzerService {
   private generateOverallInsights(
     dominant: QuotientScore[],
     needsAttention: QuotientScore[],
-    allScores: QuotientScore[]
+    allScores: QuotientScore[],
   ): string {
     const insights: string[] = [];
 
     if (dominant.length > 0) {
       const topQuotient = dominant[0];
       insights.push(
-        `Your ${topQuotient.quotientName} appears to be a strength (score: ${topQuotient.score}).`
+        `Your ${topQuotient.quotientName} appears to be a strength (score: ${topQuotient.score}).`,
       );
     }
 
     if (needsAttention.length > 0) {
       const lowestQuotient = needsAttention[needsAttention.length - 1];
       insights.push(
-        `Your ${lowestQuotient.quotientName} may benefit from development (score: ${lowestQuotient.score}).`
+        `Your ${lowestQuotient.quotientName} may benefit from development (score: ${lowestQuotient.score}).`,
       );
     }
 
     // Check for balance
-    const scores = allScores.map(s => s.score);
+    const scores = allScores.map((s) => s.score);
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const variance = scores.reduce((sum, score) => sum + Math.pow(score - avg, 2), 0) / scores.length;
+    const variance =
+      scores.reduce((sum, score) => sum + Math.pow(score - avg, 2), 0) / scores.length;
     const stdDev = Math.sqrt(variance);
 
     if (stdDev < 15) {
@@ -262,10 +253,7 @@ export class PersonalityAnalyzerService {
   /**
    * Extracts conversation context
    */
-  private extractConversationContext(
-    message: string,
-    history: ConversationMessage[]
-  ): string {
+  private extractConversationContext(message: string, history: ConversationMessage[]): string {
     const recentMessages = history.slice(-3);
     const topics: string[] = [];
 
@@ -295,7 +283,7 @@ export class PersonalityAnalyzerService {
     history.push({
       role,
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     // Keep only last 20 messages
@@ -318,4 +306,3 @@ export class PersonalityAnalyzerService {
     this.conversationHistory.delete(sessionId);
   }
 }
-

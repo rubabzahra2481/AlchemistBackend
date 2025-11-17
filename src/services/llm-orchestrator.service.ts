@@ -27,7 +27,7 @@ export class LLMOrchestratorService {
   async generateResponse(
     selectedLLM: string,
     messages: any[],
-    options: LLMOptions = {}
+    options: LLMOptions = {},
   ): Promise<LLMResponse> {
     const modelConfig = LLM_MODELS[selectedLLM];
     if (!modelConfig) {
@@ -47,11 +47,7 @@ export class LLMOrchestratorService {
     };
 
     try {
-      return await provider.generateResponse(
-        modelConfig.model,
-        messages,
-        finalOptions
-      );
+      return await provider.generateResponse(modelConfig.model, messages, finalOptions);
     } catch (error) {
       console.error(`Error with ${selectedLLM}:`, error);
       // Fallback to GPT-4o if available
@@ -71,11 +67,3 @@ export class LLMOrchestratorService {
     return LLM_MODELS[selectedLLM] || null;
   }
 }
-
-
-
-
-
-
-
-

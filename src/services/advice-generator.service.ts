@@ -6,9 +6,7 @@ import { LLMOrchestratorService } from './llm-orchestrator.service';
 
 @Injectable()
 export class AdviceGeneratorService {
-  constructor(
-    private llmOrchestrator: LLMOrchestratorService
-  ) {}
+  constructor(private llmOrchestrator: LLMOrchestratorService) {}
 
   /**
    * Generate advice with clean psychological profile using orchestrator
@@ -17,9 +15,8 @@ export class AdviceGeneratorService {
     userMessage: string,
     profile: any,
     conversationHistory: any[],
-    selectedLLM: string = 'gpt-4o'
+    selectedLLM: string = 'gpt-4o',
   ): Promise<{ response: string; reasoning?: string }> {
-
     // Note: Crisis detection happens in parallel-llm.service.ts (safety gate)
     // The crisis indicators are stored in profile.safety and profile.dass.requiresCrisisResponse
     // We trust the LLM to respond appropriately when it sees these flags in the profile
@@ -27,36 +24,36 @@ export class AdviceGeneratorService {
 
     try {
       const systemPrompt = this.buildCleanSystemPrompt(profile);
-      
+
       const reasoningMessages: any[] = [
         { role: 'system', content: systemPrompt },
         // Use short recent context only
-        ...conversationHistory.slice(-3).map(msg => ({
+        ...conversationHistory.slice(-3).map((msg) => ({
           role: msg.role as 'user' | 'assistant',
-          content: msg.content
+          content: msg.content,
         })),
-        { 
-          role: 'user', 
-          content: this.buildUserMessagePrompt(userMessage, profile)
-        }
+        {
+          role: 'user',
+          content: this.buildUserMessagePrompt(userMessage, profile),
+        },
       ];
 
       const llmResponse = await this.llmOrchestrator.generateResponse(
         selectedLLM,
         reasoningMessages,
-        { 
-          temperature: 0.7, 
+        {
+          temperature: 0.7,
           max_tokens: 600,
-          response_format: 'json_object' // Force JSON output for OpenAI
-        }
+          response_format: 'json_object', // Force JSON output for OpenAI
+        },
       );
 
       let fullResponse = llmResponse.content || "I'm here to listen. What's on your mind?";
-      
+
       // Parse JSON response
       let cleanResponse = '';
       let extractedReasoning = '';
-      
+
       try {
         // Try to parse as JSON first
         const jsonResponse = JSON.parse(fullResponse);
@@ -66,38 +63,41 @@ export class AdviceGeneratorService {
         } else {
           // Fallback: incomplete JSON
           cleanResponse = jsonResponse.response || fullResponse;
-          extractedReasoning = jsonResponse.reasoning || 'LLM provided response without structured reasoning';
+          extractedReasoning =
+            jsonResponse.reasoning || 'LLM provided response without structured reasoning';
         }
       } catch (jsonError) {
         // Fallback: Not JSON - try old format with RESPONSE:/REASONING: markers
-      const hasResponseMarker = fullResponse.includes('RESPONSE:');
-      const hasReasoningMarker = fullResponse.includes('REASONING:');
-      
-      if (hasResponseMarker) {
-        const responseMatch = fullResponse.match(/RESPONSE:\s*(.+?)(?:\s+REASONING:|$)/s);
-        if (responseMatch && responseMatch[1]) {
-          cleanResponse = responseMatch[1].trim();
-          if (hasReasoningMarker) {
-            const reasoningMatch = fullResponse.match(/REASONING:\s*(.+)/s);
-            if (reasoningMatch) {
-              extractedReasoning = reasoningMatch[1].trim();
+        const hasResponseMarker = fullResponse.includes('RESPONSE:');
+        const hasReasoningMarker = fullResponse.includes('REASONING:');
+
+        if (hasResponseMarker) {
+          const responseMatch = fullResponse.match(/RESPONSE:\s*(.+?)(?:\s+REASONING:|$)/s);
+          if (responseMatch && responseMatch[1]) {
+            cleanResponse = responseMatch[1].trim();
+            if (hasReasoningMarker) {
+              const reasoningMatch = fullResponse.match(/REASONING:\s*(.+)/s);
+              if (reasoningMatch) {
+                extractedReasoning = reasoningMatch[1].trim();
+              }
             }
           }
-        }
         } else if (hasReasoningMarker) {
-        const parts = fullResponse.split(/\s+REASONING:\s*/);
-        cleanResponse = parts[0].trim();
-          extractedReasoning = parts[1] ? parts[1].trim() : 'LLM did not provide structured reasoning';
+          const parts = fullResponse.split(/\s+REASONING:\s*/);
+          cleanResponse = parts[0].trim();
+          extractedReasoning = parts[1]
+            ? parts[1].trim()
+            : 'LLM did not provide structured reasoning';
         } else {
           // Last resort: use raw response
-        cleanResponse = fullResponse.trim();
+          cleanResponse = fullResponse.trim();
           extractedReasoning = 'LLM did not follow the expected format - reasoning unavailable';
         }
       }
-      
+
       // Clean up any remaining markdown or formatting
       cleanResponse = cleanResponse.replace(/^\*{2}\s*/, '').replace(/\s*\*{2}$/, '');
-      
+
       // Log for debugging
       const fs = require('fs');
       const path = require('path');
@@ -105,10 +105,10 @@ export class AdviceGeneratorService {
       const timestamp = new Date().toISOString();
       const logEntry = `\n[${timestamp}] ===== LLM REASONING =====\n${extractedReasoning}\n\n`;
       fs.appendFileSync(reasoningLog, logEntry);
-      
+
       return {
         response: cleanResponse,
-        reasoning: extractedReasoning
+        reasoning: extractedReasoning,
       };
     } catch (error) {
       console.error('LLM API error:', error);
@@ -121,32 +121,40 @@ export class AdviceGeneratorService {
    */
   private buildCleanSystemPrompt(profile: any): string {
     const profileSummary = this.buildCleanProfileSummary(profile);
-    const summaryForThisMessage = profile?.summaryForThisMessage ? JSON.stringify(profile.summaryForThisMessage) : '';
+    const summaryForThisMessage = profile?.summaryForThisMessage
+      ? JSON.stringify(profile.summaryForThisMessage)
+      : '';
     const safetyBlock = profile?.safety ? `Safety: ${JSON.stringify(profile.safety)}` : '';
-    
+
     // Build integration context (conflicts, similarities, mild cases)
     let integrationContext = '';
     if (profile?.integrationMeta) {
       const meta = profile.integrationMeta;
       const parts: string[] = [];
-      
+
       if (meta.similarities && meta.similarities.length > 0) {
-        parts.push(`MODEL AGREEMENTS (Higher confidence - multiple tests confirmed): ${meta.similarities.map((s: any) => s.agreement).join('; ')}`);
+        parts.push(
+          `MODEL AGREEMENTS (Higher confidence - multiple tests confirmed): ${meta.similarities.map((s: any) => s.agreement).join('; ')}`,
+        );
       }
-      
+
       if (meta.mildCases && meta.mildCases.length > 0) {
-        parts.push(`MODERATE/BALANCED TRAITS (Person is in-between, not extreme): ${meta.mildCases.map((m: any) => `${m.trait} (${m.interpretation})`).join('; ')}`);
+        parts.push(
+          `MODERATE/BALANCED TRAITS (Person is in-between, not extreme): ${meta.mildCases.map((m: any) => `${m.trait} (${m.interpretation})`).join('; ')}`,
+        );
       }
-      
+
       if (meta.conflictResolutions && meta.conflictResolutions.length > 0) {
-        parts.push(`RESOLVED CONFLICTS (Confidence reduced due to model disagreement): ${meta.conflictResolutions.map((r: any) => `${r.conflict} - ${r.action}`).join('; ')}`);
+        parts.push(
+          `RESOLVED CONFLICTS (Confidence reduced due to model disagreement): ${meta.conflictResolutions.map((r: any) => `${r.conflict} - ${r.action}`).join('; ')}`,
+        );
       }
-      
+
       if (parts.length > 0) {
         integrationContext = `\nINTEGRATION CONTEXT (How models relate):\n${parts.join('\n')}\n`;
       }
     }
-    
+
     if (profileSummary) {
       return `You are AI Alchemist - a wise, empathetic counselor who helps people with all aspects of life - from personal growth and emotional well-being to practical life decisions like career, business, relationships, and personal development. You understand people through feeling and energy, then turn that understanding into clear systems that help them grow. Your personality is calm but powerful — you listen deeply, see patterns others miss, and help people find meaning in how they think and feel. Your tone is gentle yet confident, emotional yet logical.
 
@@ -191,7 +199,7 @@ CRITICAL: You MUST respond with valid JSON in this EXACT format (no other text b
    */
   private buildUserMessagePrompt(userMessage: string, profile: any): string {
     const isSimpleOrGibberish = this.isSimpleOrGibberish(userMessage);
-    
+
     if (isSimpleOrGibberish) {
       return userMessage; // Let GPT-4o handle naturally
     } else {
@@ -203,9 +211,10 @@ CRITICAL: You MUST respond with valid JSON in this EXACT format (no other text b
    * Check if message is simple greeting or gibberish
    */
   private isSimpleOrGibberish(message: string): boolean {
-    const simpleGreetings = /^(hi|hello|hey|good morning|good afternoon|good evening|howdy|sup|yo)$/i;
+    const simpleGreetings =
+      /^(hi|hello|hey|good morning|good afternoon|good evening|howdy|sup|yo)$/i;
     const gibberishPattern = /^[^a-zA-Z\s]*$|^.{1,3}$|^[a-z]{1,3}$/i;
-    
+
     return simpleGreetings.test(message.trim()) || gibberishPattern.test(message.trim());
   }
 
@@ -214,9 +223,9 @@ CRITICAL: You MUST respond with valid JSON in this EXACT format (no other text b
    */
   private buildCleanProfileSummary(profile: any): string {
     if (!profile) return '';
-    
+
     const parts: string[] = [];
-    
+
     if (profile.bigFive) {
       parts.push(`Big Five: ${JSON.stringify(profile.bigFive)}`);
     }
@@ -250,7 +259,7 @@ CRITICAL: You MUST respond with valid JSON in this EXACT format (no other text b
     if (profile.bioPsych) {
       parts.push(`Bio-Psych Factors: ${JSON.stringify(profile.bioPsych)}`);
     }
-    
+
     return parts.join('\n');
   }
 }

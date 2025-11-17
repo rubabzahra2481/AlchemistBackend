@@ -20,7 +20,7 @@ export class OpenAIProvider implements ILLMProvider {
   async generateResponse(
     model: string,
     messages: any[],
-    options: LLMOptions
+    options: LLMOptions,
   ): Promise<LLMResponse> {
     try {
       const requestParams: any = {
@@ -49,11 +49,3 @@ export class OpenAIProvider implements ILLMProvider {
     }
   }
 }
-
-
-
-
-
-
-
-

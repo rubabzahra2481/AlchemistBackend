@@ -23,7 +23,7 @@ async function bootstrap() {
       'http://192.168.1.79:8000',
       'https://main.d3970mma5pzr9g.amplifyapp.com',
       /\.amplifyapp\.com$/, // Allow any Amplify domain
-      /\.elasticbeanstalk\.com$/ // Allow Elastic Beanstalk domains
+      /\.elasticbeanstalk\.com$/, // Allow Elastic Beanstalk domains
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
@@ -42,7 +42,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Quotient Advisor Agent API')
     .setDescription(
-      'AI-powered agent that understands human quotients and provides personalized advice based on personality analysis'
+      'AI-powered agent that understands human quotients and provides personalized advice based on personality analysis',
     )
     .setVersion('1.0')
     .addTag('chat', 'Chat endpoints for interacting with the advisor agent')
@@ -80,4 +80,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

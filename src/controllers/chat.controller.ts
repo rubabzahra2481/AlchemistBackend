@@ -19,11 +19,7 @@ export class ChatController {
   async chat(@Body() chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
     const sessionId = chatRequest.sessionId || uuidv4();
     const selectedLLM = chatRequest.selectedLLM || DEFAULT_LLM;
-    return await this.chatService.processMessage(
-      chatRequest.message,
-      sessionId,
-      selectedLLM
-    );
+    return await this.chatService.processMessage(chatRequest.message, sessionId, selectedLLM);
   }
 
   @Get('session/:sessionId/history')
@@ -57,8 +53,7 @@ export class ChatController {
   async getAvailableLLMs() {
     return {
       default: DEFAULT_LLM,
-      models: getAvailableLLMs()
+      models: getAvailableLLMs(),
     };
   }
 }
-

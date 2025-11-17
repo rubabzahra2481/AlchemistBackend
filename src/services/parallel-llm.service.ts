@@ -75,7 +75,7 @@ export class ParallelLLMService {
 
   constructor(
     private configService: ConfigService,
-    private llmOrchestrator: LLMOrchestratorService
+    private llmOrchestrator: LLMOrchestratorService,
   ) {}
 
   // Load and cache KB system prompts (verbatim). If file contains a JSON object
@@ -114,20 +114,38 @@ export class ParallelLLMService {
     hasBioPsych: boolean;
   } {
     const lower = message.toLowerCase();
-    const hasAttachment = /(please don\'t leave|leave me|abandon|need you|close|closeness|too close|space|independent|depend|trust|afraid of love|afraid of closeness)/i.test(lower);
-    const hasEnneagram = /(be right|be loved|be admired|unique|authentic|understand|protect energy|safe|support|freedom|happiness|control|independent|peace|harmony)/i.test(lower);
-    const hasMBTI = /(i am an introvert|i am an extrovert|i am introverted|i am extroverted|ambivert|mbti|personality type|my type is|sensing type|intuitive type|thinking type|feeling type|judging type|perceiving type)/i.test(lower);
-    const hasErikson = /(who am i|purpose|identity|belong|trust|love|lonely|useless|meaningful|legacy|stuck|regret|life review)/i.test(lower);
-    const hasGestalt = /(right now i feel|i notice|avoid|numb|joke|humor to avoid|go along|they make me feel|it\'s my fault|i shouldn\'t feel|i freeze|can\'t act)/i.test(lower);
-    const hasBioPsych = /(sleep|slept|insomnia|tired|exhausted|fatigue|burnout|headache|pain|sick|ill|fever|period|pms|hormones|caffeine|coffee|alcohol|drunk|hungover|hungry|skipped meal|dehydrated|exercise|sedentary|sitting|heat|cold|noise|messy|crowded|overload|multitask|lonely|isolated|financial|money|debt|job|moving|breakup)/i.test(lower);
-    
+    const hasAttachment =
+      /(please don\'t leave|leave me|abandon|need you|close|closeness|too close|space|independent|depend|trust|afraid of love|afraid of closeness)/i.test(
+        lower,
+      );
+    const hasEnneagram =
+      /(be right|be loved|be admired|unique|authentic|understand|protect energy|safe|support|freedom|happiness|control|independent|peace|harmony)/i.test(
+        lower,
+      );
+    const hasMBTI =
+      /(i am an introvert|i am an extrovert|i am introverted|i am extroverted|ambivert|mbti|personality type|my type is|sensing type|intuitive type|thinking type|feeling type|judging type|perceiving type)/i.test(
+        lower,
+      );
+    const hasErikson =
+      /(who am i|purpose|identity|belong|trust|love|lonely|useless|meaningful|legacy|stuck|regret|life review)/i.test(
+        lower,
+      );
+    const hasGestalt =
+      /(right now i feel|i notice|avoid|numb|joke|humor to avoid|go along|they make me feel|it\'s my fault|i shouldn\'t feel|i freeze|can\'t act)/i.test(
+        lower,
+      );
+    const hasBioPsych =
+      /(sleep|slept|insomnia|tired|exhausted|fatigue|burnout|headache|pain|sick|ill|fever|period|pms|hormones|caffeine|coffee|alcohol|drunk|hungover|hungry|skipped meal|dehydrated|exercise|sedentary|sitting|heat|cold|noise|messy|crowded|overload|multitask|lonely|isolated|financial|money|debt|job|moving|breakup)/i.test(
+        lower,
+      );
+
     return { hasAttachment, hasEnneagram, hasMBTI, hasErikson, hasGestalt, hasBioPsych };
   }
 
   // Basic JSON parse with fallback extraction and optional retry helper can be added later
   private parseJsonSafe(text: string, fallback: any) {
     if (!text || typeof text !== 'string') return fallback;
-    
+
     // Step 1: Strip markdown code blocks if present
     let cleaned = text.trim();
     const codeBlockRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/g;
@@ -135,7 +153,7 @@ export class ParallelLLMService {
     if (codeBlockMatch) {
       cleaned = codeBlockMatch[1].trim();
     }
-    
+
     // Step 2: Try direct parse
     try {
       return JSON.parse(cleaned);
@@ -143,7 +161,7 @@ export class ParallelLLMService {
       // Step 3: Try to extract first complete JSON object (handle nested braces)
       const start = cleaned.indexOf('{');
       if (start === -1) return fallback;
-      
+
       let braceCount = 0;
       let end = start;
       for (let i = start; i < cleaned.length; i++) {
@@ -154,7 +172,7 @@ export class ParallelLLMService {
           break;
         }
       }
-      
+
       if (end > start) {
         const slice = cleaned.substring(start, end + 1);
         try {
@@ -164,7 +182,7 @@ export class ParallelLLMService {
           return fallback;
         }
       }
-      
+
       return fallback;
     }
   }
@@ -174,7 +192,7 @@ export class ParallelLLMService {
     message: string,
     profile: PsychologicalProfile,
     history: any[],
-    selectedLLM: string
+    selectedLLM: string,
   ): Promise<PsychologicalProfile['summaryForThisMessage'] | null> {
     const system = [
       'You create a compact JSON summary for the latest message.',
@@ -188,7 +206,7 @@ export class ParallelLLMService {
       '  "focus_for_reply": [""],',
       '  "evidence_refs": [""],',
       '  "confidence": 0.0',
-      '}'
+      '}',
     ].join('\n');
 
     const contextObj = {
@@ -204,7 +222,7 @@ export class ParallelLLMService {
       erikson: (profile as any).erikson || null,
       gestalt: (profile as any).gestalt || null,
       bioPsych: (profile as any).bioPsych || null,
-      latest_message: message
+      latest_message: message,
     };
 
     try {
@@ -212,9 +230,9 @@ export class ParallelLLMService {
         selectedLLM,
         [
           { role: 'system', content: system },
-          { role: 'user', content: JSON.stringify(contextObj) }
+          { role: 'user', content: JSON.stringify(contextObj) },
         ],
-        { temperature: 0.1, max_tokens: 350 }
+        { temperature: 0.1, max_tokens: 350 },
       );
       return this.parseJsonSafe(res.content, null);
     } catch (e) {
@@ -226,8 +244,12 @@ export class ParallelLLMService {
   /**
    * Main analysis method - Smart Incremental with Option 2 (Accumulate Over Time)
    */
-  async analyze(message: string, history: any[], sessionId: string, selectedLLM: string = 'gpt-4o'): Promise<PsychologicalProfile | null> {
-
+  async analyze(
+    message: string,
+    history: any[],
+    sessionId: string,
+    selectedLLM: string = 'gpt-4o',
+  ): Promise<PsychologicalProfile | null> {
     try {
       // SESSION ISOLATION: Ensure profile cache is properly isolated per session
       // Check if this looks like a fresh start (only current message or empty history)
@@ -237,7 +259,9 @@ export class ParallelLLMService {
         const cached = this.sessionCache.get(sessionId);
         // If we have cached data but this is a fresh start, something is wrong - clear it
         if (cached && Object.keys(cached).length > 0) {
-          console.log(`[SESSION ISOLATION] Clearing cached profile for session ${sessionId} - detected fresh start (history length: ${history.length})`);
+          console.log(
+            `[SESSION ISOLATION] Clearing cached profile for session ${sessionId} - detected fresh start (history length: ${history.length})`,
+          );
           this.sessionCache.delete(sessionId);
         }
       }
@@ -251,7 +275,8 @@ export class ParallelLLMService {
       };
       let safety: PsychologicalProfile['safety'] = { flag: 'none' };
       if (riskPatterns.self_harm.test(message)) safety = { flag: 'risk', category: 'self_harm' };
-      else if (riskPatterns.harm_others.test(message)) safety = { flag: 'risk', category: 'harm_others' };
+      else if (riskPatterns.harm_others.test(message))
+        safety = { flag: 'risk', category: 'harm_others' };
       else if (riskPatterns.abuse.test(message)) safety = { flag: 'risk', category: 'abuse' };
       else if (riskPatterns.medical.test(message)) safety = { flag: 'risk', category: 'medical' };
 
@@ -383,7 +408,6 @@ export class ParallelLLMService {
       results.forEach((result, index) => {
         const type = analysisTypes[index];
         newProfile[type] = result;
-        
       });
       // attach safety flag
       newProfile.safety = safety;
@@ -396,7 +420,12 @@ export class ParallelLLMService {
       // CRITICAL: Pass only NEW profile (this turn's analysis) to summary, not merged historical profile
       // This ensures summary only reflects current message, not old session data
       try {
-        const summary = await this.buildPerMessageSummary(message, newProfile, history.slice(-3), selectedLLM);
+        const summary = await this.buildPerMessageSummary(
+          message,
+          newProfile,
+          history.slice(-3),
+          selectedLLM,
+        );
         if (summary) {
           mergedProfile.summaryForThisMessage = summary;
           // Also attach to newProfile for clarity
@@ -421,31 +450,108 @@ export class ParallelLLMService {
    */
   private quickKeywordCheck(message: string): Partial<Classification> {
     const lower = message.toLowerCase();
-    
+
     // Crisis keywords (highest priority)
-    const crisisKeywords = ['suicide', 'suicidal', 'kill myself', 'want to die', 'end it all', 'self harm', 'hurt myself', 'better off dead', 'give up on everything', 'worthless', 'hopeless', 'nothing matters'];
-    const hasCrisisIndicators = crisisKeywords.some(kw => lower.includes(kw));
-    
+    const crisisKeywords = [
+      'suicide',
+      'suicidal',
+      'kill myself',
+      'want to die',
+      'end it all',
+      'self harm',
+      'hurt myself',
+      'better off dead',
+      'give up on everything',
+      'worthless',
+      'hopeless',
+      'nothing matters',
+    ];
+    const hasCrisisIndicators = crisisKeywords.some((kw) => lower.includes(kw));
+
     // Personality trait keywords (Big Five related)
-    const personalityKeywords = ['outgoing', 'shy', 'extroverted', 'introverted', 'organized', 'messy', 'disorganized', 'creative', 'conventional', 'anxious', 'calm', 'nervous', 'worried', 'kind', 'assertive', 'agreeable', 'competitive', 'open-minded', 'traditional'];
-    const hasPersonalityIndicators = personalityKeywords.some(kw => lower.includes(kw));
-    
+    const personalityKeywords = [
+      'outgoing',
+      'shy',
+      'extroverted',
+      'introverted',
+      'organized',
+      'messy',
+      'disorganized',
+      'creative',
+      'conventional',
+      'anxious',
+      'calm',
+      'nervous',
+      'worried',
+      'kind',
+      'assertive',
+      'agreeable',
+      'competitive',
+      'open-minded',
+      'traditional',
+    ];
+    const hasPersonalityIndicators = personalityKeywords.some((kw) => lower.includes(kw));
+
     // Emotional keywords
-    const emotionalKeywords = ['sad', 'depressed', 'anxious', 'stressed', 'overwhelmed', 'scared', 'angry', 'frustrated', 'hopeless', 'lonely', 'tired', 'exhausted'];
-    const hasEmotionalContent = emotionalKeywords.some(kw => lower.includes(kw));
-    
+    const emotionalKeywords = [
+      'sad',
+      'depressed',
+      'anxious',
+      'stressed',
+      'overwhelmed',
+      'scared',
+      'angry',
+      'frustrated',
+      'hopeless',
+      'lonely',
+      'tired',
+      'exhausted',
+    ];
+    const hasEmotionalContent = emotionalKeywords.some((kw) => lower.includes(kw));
+
     // Self-worth keywords
-    const selfWorthKeywords = ['not good enough', 'worthless', 'failure', 'useless', 'pathetic', 'hate myself', 'don\'t deserve', 'can\'t do anything'];
-    const hasSelfWorthContent = selfWorthKeywords.some(kw => lower.includes(kw));
-    
+    const selfWorthKeywords = [
+      'not good enough',
+      'worthless',
+      'failure',
+      'useless',
+      'pathetic',
+      'hate myself',
+      "don't deserve",
+      "can't do anything",
+    ];
+    const hasSelfWorthContent = selfWorthKeywords.some((kw) => lower.includes(kw));
+
     // Dark Triad keywords (manipulative, narcissistic, callous)
-    const darkTriadKeywords = ['manipulate', 'control', 'use people', 'better than', 'superior', 'don\'t care about others', 'fake it'];
-    const hasDarkTriadIndicators = darkTriadKeywords.some(kw => lower.includes(kw));
-    
+    const darkTriadKeywords = [
+      'manipulate',
+      'control',
+      'use people',
+      'better than',
+      'superior',
+      "don't care about others",
+      'fake it',
+    ];
+    const hasDarkTriadIndicators = darkTriadKeywords.some((kw) => lower.includes(kw));
+
     // Cognitive/thinking style keywords (System 1 vs System 2)
-    const cognitiveKeywords = ['gut', 'instinct', 'intuition', 'impulsive', 'spontaneous', 'overthink', 'overanalyze', 'act first', 'think later', 'rational', 'logical', 'analyze everything', 'think too much'];
-    const hasCognitiveIndicators = cognitiveKeywords.some(kw => lower.includes(kw));
-    
+    const cognitiveKeywords = [
+      'gut',
+      'instinct',
+      'intuition',
+      'impulsive',
+      'spontaneous',
+      'overthink',
+      'overanalyze',
+      'act first',
+      'think later',
+      'rational',
+      'logical',
+      'analyze everything',
+      'think too much',
+    ];
+    const hasCognitiveIndicators = cognitiveKeywords.some((kw) => lower.includes(kw));
+
     return {
       hasCrisisIndicators,
       hasPersonalityIndicators,
@@ -459,14 +565,18 @@ export class ParallelLLMService {
   /**
    * Classify message to determine what analysis is needed (TRUE HYBRID: Keywords first, then LLM)
    */
-  private async classifyMessage(message: string, history: any[], selectedLLM: string): Promise<Classification> {
+  private async classifyMessage(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<Classification> {
     try {
       // HYBRID STEP 1: Quick keyword check first (instant, 100% consistent)
       const keywordResults = this.quickKeywordCheck(message);
-      
+
       // OPTIMIZATION: If keywords found ALL indicators clearly, skip LLM entirely (100% consistent + faster + cheaper)
-      const hasAnyKeywordMatch = Object.values(keywordResults).some(v => v === true);
-      
+      const hasAnyKeywordMatch = Object.values(keywordResults).some((v) => v === true);
+
       if (hasAnyKeywordMatch) {
         // Keyword matched - use keyword results directly (100% consistent, no LLM call)
         console.log('[CLASSIFICATION] Keyword match found - skipping LLM (100% consistent)');
@@ -477,15 +587,19 @@ export class ParallelLLMService {
           hasDarkTriadIndicators: keywordResults.hasDarkTriadIndicators || false,
           hasPersonalityIndicators: keywordResults.hasPersonalityIndicators || false,
           hasCognitiveIndicators: keywordResults.hasCognitiveIndicators || false,
-          urgency: keywordResults.hasCrisisIndicators ? 'critical' : 
-                   keywordResults.hasSelfWorthContent ? 'high' :
-                   keywordResults.hasEmotionalContent ? 'medium' : 'low',
+          urgency: keywordResults.hasCrisisIndicators
+            ? 'critical'
+            : keywordResults.hasSelfWorthContent
+              ? 'high'
+              : keywordResults.hasEmotionalContent
+                ? 'medium'
+                : 'low',
         };
       }
-      
+
       // HYBRID STEP 2: No keywords found - use LLM for edge cases (80% consistent)
       console.log('[CLASSIFICATION] No keyword match - using LLM for semantic understanding');
-      
+
       const response = await this.llmOrchestrator.generateResponse(
         selectedLLM,
         [
@@ -682,7 +796,10 @@ Message: "I think too much before making any decision"
 **Now classify this message:**
 
 Message: "${message}"
-Recent history: ${history.slice(-3).map(m => m.content).join(', ')}
+Recent history: ${history
+              .slice(-3)
+              .map((m) => m.content)
+              .join(', ')}
 
 Return JSON:
 {
@@ -701,19 +818,22 @@ Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       const llmResult = JSON.parse(response.content || '{}');
-      
+
       // HYBRID STEP 2: Merge keyword results with LLM results (keyword wins if found)
       return {
         hasCrisisIndicators: keywordResults.hasCrisisIndicators || llmResult.hasCrisisIndicators,
         hasEmotionalContent: keywordResults.hasEmotionalContent || llmResult.hasEmotionalContent,
         hasSelfWorthContent: keywordResults.hasSelfWorthContent || llmResult.hasSelfWorthContent,
-        hasDarkTriadIndicators: keywordResults.hasDarkTriadIndicators || llmResult.hasDarkTriadIndicators,
-        hasPersonalityIndicators: keywordResults.hasPersonalityIndicators || llmResult.hasPersonalityIndicators,
-        hasCognitiveIndicators: keywordResults.hasCognitiveIndicators || llmResult.hasCognitiveIndicators,
+        hasDarkTriadIndicators:
+          keywordResults.hasDarkTriadIndicators || llmResult.hasDarkTriadIndicators,
+        hasPersonalityIndicators:
+          keywordResults.hasPersonalityIndicators || llmResult.hasPersonalityIndicators,
+        hasCognitiveIndicators:
+          keywordResults.hasCognitiveIndicators || llmResult.hasCognitiveIndicators,
         hasAttachment: !!llmResult.hasAttachment,
         hasEnneagram: !!llmResult.hasEnneagram,
         hasMBTI: !!llmResult.hasMBTI,
@@ -740,7 +860,11 @@ Return JSON:
   /**
    * Analyze personality using Big Five KB
    */
-  private async callLLMWithBigFiveKB(message: string, history: any[], selectedLLM: string): Promise<any> {
+  private async callLLMWithBigFiveKB(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<any> {
     try {
       const sys = this.getKBPrompt('BIG5_Complete_Analysis.txt');
       const response = await this.llmOrchestrator.generateResponse(
@@ -809,7 +933,10 @@ Analyze personality from conversation patterns, not surface statements. Use the 
           {
             role: 'user',
             content: `Conversation:
-${history.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+${history
+  .slice(-5)
+  .map((m) => `${m.role}: ${m.content}`)
+  .join('\n')}
 
 Latest: "${message}"
 
@@ -824,7 +951,7 @@ Analyze Big Five traits. Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -837,7 +964,11 @@ Analyze Big Five traits. Return JSON:
   /**
    * Analyze mental health using DASS-42 KB
    */
-  private async callLLMWithDASSKB(message: string, history: any[], selectedLLM: string): Promise<any> {
+  private async callLLMWithDASSKB(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<any> {
     try {
       const sys = this.getKBPrompt('DASS42_Complete_Analysis.txt');
       const response = await this.llmOrchestrator.generateResponse(
@@ -860,7 +991,10 @@ CRITICAL: Mental health varies by context and life conditions. Analyze emotional
           {
             role: 'user',
             content: `Conversation:
-${history.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+${history
+  .slice(-5)
+  .map((m) => `${m.role}: ${m.content}`)
+  .join('\n')}
 
 Latest: "${message}"
 
@@ -874,7 +1008,7 @@ Analyze mental health. Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       return this.parseJsonSafe(response.content, { concerns: [] });
@@ -887,7 +1021,11 @@ Analyze mental health. Return JSON:
   /**
    * Analyze self-esteem using RSE KB
    */
-  private async callLLMWithRSEKB(message: string, history: any[], selectedLLM: string): Promise<any> {
+  private async callLLMWithRSEKB(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<any> {
     try {
       const sys = this.getKBPrompt('RSE_Complete_Analysis.txt');
       const response = await this.llmOrchestrator.generateResponse(
@@ -942,7 +1080,10 @@ CRITICAL: Individual variation (SD ~6.35) is much larger than demographic differ
           {
             role: 'user',
             content: `Conversation:
-${history.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+${history
+  .slice(-5)
+  .map((m) => `${m.role}: ${m.content}`)
+  .join('\n')}
 
 Latest: "${message}"
 
@@ -953,7 +1094,7 @@ Analyze self-esteem. Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       return this.parseJsonSafe(response.content, { indicators: [] });
@@ -966,7 +1107,11 @@ Analyze self-esteem. Return JSON:
   /**
    * Analyze Dark Triad traits using Dark Triad KB
    */
-  private async callLLMWithDarkTriadKB(message: string, history: any[], selectedLLM: string): Promise<any> {
+  private async callLLMWithDarkTriadKB(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<any> {
     try {
       const sys = this.getKBPrompt('DarkTriad_Complete_Analysis.txt');
       const response = await this.llmOrchestrator.generateResponse(
@@ -1111,7 +1256,10 @@ CRITICAL: Dark Triad traits are normal variations in personality, not pathology.
           {
             role: 'user',
             content: `Conversation:
-${history.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+${history
+  .slice(-5)
+  .map((m) => `${m.role}: ${m.content}`)
+  .join('\n')}
 
 Latest: "${message}"
 
@@ -1124,7 +1272,7 @@ Analyze Dark Triad traits. Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -1137,7 +1285,11 @@ Analyze Dark Triad traits. Return JSON:
   /**
    * Analyze cognitive/thinking style using CRT KB
    */
-  private async callLLMWithCRTKB(message: string, history: any[], selectedLLM: string): Promise<any> {
+  private async callLLMWithCRTKB(
+    message: string,
+    history: any[],
+    selectedLLM: string,
+  ): Promise<any> {
     try {
       const sys = this.getKBPrompt('CRT_Complete_Analysis.txt');
       const response = await this.llmOrchestrator.generateResponse(
@@ -1204,7 +1356,10 @@ CRITICAL: Cognitive style is NOT about intelligence - it's about thinking approa
           {
             role: 'user',
             content: `Conversation:
-${history.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')}
+${history
+  .slice(-5)
+  .map((m) => `${m.role}: ${m.content}`)
+  .join('\n')}
 
 Latest: "${message}"
 
@@ -1216,7 +1371,7 @@ Analyze cognitive/thinking style. Return JSON:
 }`,
           },
         ],
-        { temperature: 0.0, max_tokens: 1000 }
+        { temperature: 0.0, max_tokens: 1000 },
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -1232,8 +1387,11 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('AttachmentStyleClassifier.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ { role: 'system', content: sys }, { role: 'user', content: message } ],
-        { temperature: 0.0, max_tokens: 800 }
+        [
+          { role: 'system', content: sys },
+          { role: 'user', content: message },
+        ],
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1252,8 +1410,11 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('Enneagram.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ { role: 'system', content: sys }, { role: 'user', content: message } ],
-        { temperature: 0.0, max_tokens: 800 }
+        [
+          { role: 'system', content: sys },
+          { role: 'user', content: message },
+        ],
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1272,11 +1433,14 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('MBTI.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ 
-          { role: 'system', content: sys }, 
-          { role: 'user', content: `Message: "${message}"\n\nAnalyze for MBTI type. Return JSON only:\n{"EI": "I", "SN": "unknown", "TF": "unknown", "JP": "unknown", "Confidence": {"EI": 0.7}, "Evidence": ["quote here"]}` }
+        [
+          { role: 'system', content: sys },
+          {
+            role: 'user',
+            content: `Message: "${message}"\n\nAnalyze for MBTI type. Return JSON only:\n{"EI": "I", "SN": "unknown", "TF": "unknown", "JP": "unknown", "Confidence": {"EI": 0.7}, "Evidence": ["quote here"]}`,
+          },
         ],
-        { temperature: 0.0, max_tokens: 800 }
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1295,8 +1459,11 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('EPSI_CompleteAnalysis.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ { role: 'system', content: sys }, { role: 'user', content: message } ],
-        { temperature: 0.0, max_tokens: 800 }
+        [
+          { role: 'system', content: sys },
+          { role: 'user', content: message },
+        ],
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1315,8 +1482,11 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('GestaltAwareness.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ { role: 'system', content: sys }, { role: 'user', content: message } ],
-        { temperature: 0.0, max_tokens: 800 }
+        [
+          { role: 'system', content: sys },
+          { role: 'user', content: message },
+        ],
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1335,11 +1505,14 @@ Analyze cognitive/thinking style. Return JSON:
       const sys = this.getKBPrompt('Bio-PsychReasoner.txt');
       const res = await this.llmOrchestrator.generateResponse(
         selectedLLM,
-        [ 
-          { role: 'system', content: sys }, 
-          { role: 'user', content: `Message: "${message}"\n\nAnalyze for biological/lifestyle factors. Return JSON only:\n{"Possible_Factors": ["Sleep"], "Confidence_By_Factor": {"Sleep": 0.7}, "Evidence": ["quote here"], "Notes": ""}` }
+        [
+          { role: 'system', content: sys },
+          {
+            role: 'user',
+            content: `Message: "${message}"\n\nAnalyze for biological/lifestyle factors. Return JSON only:\n{"Possible_Factors": ["Sleep"], "Confidence_By_Factor": {"Sleep": 0.7}, "Evidence": ["quote here"], "Notes": ""}`,
+          },
         ],
-        { temperature: 0.0, max_tokens: 800 }
+        { temperature: 0.0, max_tokens: 800 },
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1363,4 +1536,3 @@ Analyze cognitive/thinking style. Return JSON:
 
 // New analyzers using KB system prompts (Attachment, Enneagram, MBTI, Erikson, Gestalt)
 // Placed inside class above; ensure not outside class. (Note: Editor appended earlier class end; re-open class)
-

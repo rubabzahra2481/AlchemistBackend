@@ -1,9 +1,5 @@
 export interface ILLMProvider {
-  generateResponse(
-    model: string,
-    messages: any[],
-    options: LLMOptions
-  ): Promise<LLMResponse>;
+  generateResponse(model: string, messages: any[], options: LLMOptions): Promise<LLMResponse>;
 }
 
 export interface LLMOptions {
@@ -19,5 +15,3 @@ export interface LLMResponse {
   usage?: any;
   reasoning?: string;
 }
-
-

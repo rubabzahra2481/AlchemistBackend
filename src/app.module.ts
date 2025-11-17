@@ -36,4 +36,3 @@ import { GeminiProvider } from './providers/gemini.provider';
   ],
 })
 export class AppModule {}
-

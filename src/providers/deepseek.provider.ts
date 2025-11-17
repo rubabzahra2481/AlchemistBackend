@@ -21,7 +21,7 @@ export class DeepSeekProvider implements ILLMProvider {
   async generateResponse(
     model: string,
     messages: any[],
-    options: LLMOptions
+    options: LLMOptions,
   ): Promise<LLMResponse> {
     try {
       const completion = await this.client.chat.completions.create({
@@ -43,11 +43,3 @@ export class DeepSeekProvider implements ILLMProvider {
     }
   }
 }
-
-
-
-
-
-
-
-
