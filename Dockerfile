@@ -6,7 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+# Note: Deprecation warnings from Jest's transitive deps (glob@7) are expected and harmless
+RUN npm ci --no-audit --no-fund
 
 # Copy source code
 COPY . .

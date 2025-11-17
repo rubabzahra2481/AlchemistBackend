@@ -84,5 +84,9 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "overrides": {
+    "glob": "^10.0.0",
+    "inflight": "npm:@jsdevtools/inflight@^1.0.6"
   }
 }
