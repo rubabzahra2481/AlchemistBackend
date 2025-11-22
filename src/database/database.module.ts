@@ -40,6 +40,16 @@ import { ChatMessage } from '../entities/chat-message.entity';
               rejectUnauthorized: false, // For Aurora Postgres RDS
             },
             logging: configService.get<string>('NODE_ENV') === 'development',
+            // Retry connection on failure (important for App Runner)
+            retryAttempts: 3,
+            retryDelay: 3000, // 3 seconds between retries
+            // Connection timeout (30 seconds)
+            connectTimeoutMS: 30000,
+            // Don't fail on connection error - let the app start and retry
+            extra: {
+              max: 10, // Max pool size
+              connectionTimeoutMillis: 30000,
+            },
           };
         } catch (error) {
           console.error('❌ [DatabaseModule] Failed to configure database:', error);

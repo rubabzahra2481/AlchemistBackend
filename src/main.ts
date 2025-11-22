@@ -70,8 +70,9 @@ async function bootstrap() {
       res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // Amplify uses PORT environment variable (usually 8080 or 3000)
-    const port = process.env.PORT || 5000;
+    // App Runner uses PORT environment variable (usually 8080 or 3000)
+    // Default to 3000 to match Dockerfile EXPOSE
+    const port = process.env.PORT || 3000;
     console.log(`🌐 [Bootstrap] Starting server on port ${port}...`);
     await app.listen(port, '0.0.0.0'); // Listen on all interfaces for Amplify
 
