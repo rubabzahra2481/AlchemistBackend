@@ -9,9 +9,10 @@ import { ChatMessage } from '../entities/chat-message.entity';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
+        let databaseUrl: string | undefined;
         try {
           console.log('🗄️ [DatabaseModule] Initializing database connection...');
-          const databaseUrl = configService.get<string>('DATABASE_URL');
+          databaseUrl = configService.get<string>('DATABASE_URL');
           
           if (!databaseUrl) {
             console.error('❌ [DatabaseModule] DATABASE_URL is not set in environment variables');
@@ -27,8 +28,8 @@ import { ChatMessage } from '../entities/chat-message.entity';
           console.log('🗄️ [DatabaseModule] Host:', url.hostname);
           console.log('🗄️ [DatabaseModule] Port:', parseInt(url.port, 10) || 5432);
           
-          return {
-            type: 'postgres',
+          const config = {
+            type: 'postgres' as const,
             host: url.hostname,
             port: parseInt(url.port, 10) || 5432,
             username: url.username,
@@ -46,9 +47,36 @@ import { ChatMessage } from '../entities/chat-message.entity';
               connectionTimeoutMillis: 30000, // Timeout for getting connection from pool (30 seconds)
               idleTimeoutMillis: 30000, // Timeout for idle connections (30 seconds)
             },
+            // Retry connection on failure (TypeORM will retry during NestFactory.create())
+            retryAttempts: 5, // Increased retries
+            retryDelay: 5000, // 5 seconds between retries
+            // Auto-load entities (TypeORM will load them automatically)
+            autoLoadEntities: false, // We're explicitly providing entities
+            // Connection timeout
+            connectTimeoutMS: 30000, // 30 seconds connection timeout
           };
-        } catch (error) {
-          console.error('❌ [DatabaseModule] Failed to configure database:', error);
+
+          console.log('✅ [DatabaseModule] Database configuration created successfully');
+          return config;
+        } catch (error: any) {
+          console.error('❌ [DatabaseModule] Failed to configure database:');
+          console.error('❌ [DatabaseModule] Error message:', error?.message || String(error));
+          console.error('❌ [DatabaseModule] Error stack:', error?.stack);
+          console.error('❌ [DatabaseModule] DATABASE_URL format:', databaseUrl ? 'Present' : 'Missing');
+          if (databaseUrl) {
+            try {
+              const testUrl = new URL(databaseUrl);
+              console.error('❌ [DatabaseModule] DATABASE_URL components:');
+              console.error('   - Protocol:', testUrl.protocol);
+              console.error('   - Hostname:', testUrl.hostname);
+              console.error('   - Port:', testUrl.port || 'default (5432)');
+              console.error('   - Username:', testUrl.username ? 'Set' : 'Missing');
+              console.error('   - Password:', testUrl.password ? 'Set' : 'Missing');
+              console.error('   - Database:', testUrl.pathname || 'Missing');
+            } catch (urlError) {
+              console.error('❌ [DatabaseModule] DATABASE_URL is not a valid URL');
+            }
+          }
           throw error;
         }
       },
