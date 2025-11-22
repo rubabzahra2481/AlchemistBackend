@@ -60,7 +60,15 @@ export class ChatController {
   @ApiOperation({ summary: 'Get all chat sessions for the authenticated user' })
   @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
   async getAllSessions(@UserId() userId: string) {
-    return await this.chatService.getAllSessions(userId);
+    console.log('📥 [ChatController] GET /chat/sessions called for userId:', userId);
+    try {
+      const sessions = await this.chatService.getAllSessions(userId);
+      console.log('✅ [ChatController] Returning sessions:', sessions?.length || 0);
+      return sessions;
+    } catch (error) {
+      console.error('❌ [ChatController] Error getting sessions:', error);
+      throw error;
+    }
   }
 
   @Get('quotients')
