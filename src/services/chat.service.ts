@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PersonalityAnalyzerService } from './personality-analyzer.service';
+import { PersonalityAnalyzerService, ConversationMessage } from './personality-analyzer.service';
 import { AdviceGeneratorService } from './advice-generator.service';
 import { ConversationAnalyzerService } from './conversation-analyzer.service';
 import { ParallelLLMService } from './parallel-llm.service';
@@ -62,16 +62,22 @@ export class ChatService {
       await this.chatRepository.saveUserMessage(sessionId, userId, message, nextSequenceNumber);
 
       // ✅ Build history array for analysis (from existing messages + new message)
-      const history = [
-        ...existingMessages.map((m) => ({ role: m.role, content: m.content, timestamp: m.createdAt })),
+      // Ensure all timestamps are valid Date objects for ConversationMessage interface
+      const history: ConversationMessage[] = [
+        ...existingMessages.map((m) => ({ 
+          role: m.role as 'user' | 'assistant', 
+          content: m.content, 
+          timestamp: m.createdAt || new Date() 
+        })),
         { role: 'user' as const, content: message, timestamp: new Date() },
       ];
 
       // Get history WITHOUT the current message (since we pass message separately to analyzers)
-      const historyBeforeCurrent = existingMessages.map((m) => ({
-        role: m.role,
+      // Ensure all timestamps are valid Date objects
+      const historyBeforeCurrent: ConversationMessage[] = existingMessages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
         content: m.content,
-        timestamp: m.createdAt,
+        timestamp: m.createdAt || new Date(),
       }));
 
       // NEW: Parallel LLM analysis with classification and selective analysis
@@ -133,18 +139,31 @@ export class ChatService {
       const messageCount = await this.chatRepository.getSessionMessageCount(sessionId);
       
       // Auto-generate title from first user message if not set
-      let title: string | undefined = session.title || undefined;
+      // Explicitly convert null to undefined for TypeScript type safety
+      let title: string | undefined = session.title ?? undefined;
       if (!title && existingMessages.length === 0) {
         // First message - create title from first 50 characters
         title = message.length > 50 ? message.substring(0, 50) + '...' : message;
       }
 
-      await this.chatRepository.updateSession(sessionId, userId, {
-        title: title || undefined,
+      // Build update object with explicit null-to-undefined conversion
+      const sessionUpdates: {
+        title?: string;
+        currentProfile?: any;
+        messageCount?: number;
+        selectedLLM?: string;
+      } = {
         currentProfile: cleanedProfile,
         messageCount,
         selectedLLM,
-      });
+      };
+
+      // Only include title if it's defined (exclude null/undefined/empty string)
+      if (title && title.trim().length > 0) {
+        sessionUpdates.title = title;
+      }
+
+      await this.chatRepository.updateSession(sessionId, userId, sessionUpdates);
 
       return {
         response: adviceResult.response,
@@ -158,6 +177,7 @@ export class ChatService {
       console.error('Error in processMessage:', error);
 
       // Return a fallback response
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         response: "I'm here to help! What's on your mind today?",
         sessionId,
@@ -168,7 +188,7 @@ export class ChatService {
           conversationContext: 'Starting new conversation',
         },
         recommendations: [],
-        reasoning: `Error: ${error.message}`,
+        reasoning: `Error: ${errorMessage}`,
       };
     }
   }

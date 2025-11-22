@@ -64,8 +64,8 @@ export class SupabaseAuthService {
       return user.id;
     } catch (error) {
       console.error('❌ [SupabaseAuthService] Token validation error:', error);
-      throw new Error(`Token validation failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Token validation failed: ${errorMessage}`);
     }
   }
 }
-
