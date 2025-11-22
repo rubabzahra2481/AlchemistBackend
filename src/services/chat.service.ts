@@ -63,14 +63,15 @@ export class ChatService {
 
       // ✅ Build history array for analysis (from existing messages + new message)
       const history = [
-        ...existingMessages.map((m) => ({ role: m.role, content: m.content })),
-        { role: 'user' as const, content: message },
+        ...existingMessages.map((m) => ({ role: m.role, content: m.content, timestamp: m.createdAt })),
+        { role: 'user' as const, content: message, timestamp: new Date() },
       ];
 
       // Get history WITHOUT the current message (since we pass message separately to analyzers)
       const historyBeforeCurrent = existingMessages.map((m) => ({
         role: m.role,
         content: m.content,
+        timestamp: m.createdAt,
       }));
 
       // NEW: Parallel LLM analysis with classification and selective analysis
@@ -132,14 +133,14 @@ export class ChatService {
       const messageCount = await this.chatRepository.getSessionMessageCount(sessionId);
       
       // Auto-generate title from first user message if not set
-      let title = session.title;
+      let title: string | undefined = session.title || undefined;
       if (!title && existingMessages.length === 0) {
         // First message - create title from first 50 characters
         title = message.length > 50 ? message.substring(0, 50) + '...' : message;
       }
 
       await this.chatRepository.updateSession(sessionId, userId, {
-        title,
+        title: title || undefined,
         currentProfile: cleanedProfile,
         messageCount,
         selectedLLM,
