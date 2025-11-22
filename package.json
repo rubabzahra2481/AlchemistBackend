@@ -30,6 +30,7 @@
     "db:dates": "ts-node scripts/check-db-creation-dates.ts",
     "db:test-chat": "ts-node scripts/test-chat-storage.ts",
     "db:test-repo": "ts-node scripts/test-chat-api.ts",
+    "test:startup": "ts-node scripts/test-startup.ts",
     "migration:run": "ts-node scripts/run-migration.ts run",
     "migration:revert": "ts-node scripts/run-migration.ts revert",
     "migration:show": "ts-node scripts/run-migration.ts show"
