@@ -40,15 +40,11 @@ import { ChatMessage } from '../entities/chat-message.entity';
               rejectUnauthorized: false, // For Aurora Postgres RDS
             },
             logging: configService.get<string>('NODE_ENV') === 'development',
-            // Retry connection on failure (important for App Runner)
-            retryAttempts: 3,
-            retryDelay: 3000, // 3 seconds between retries
-            // Connection timeout (30 seconds)
-            connectTimeoutMS: 30000,
-            // Don't fail on connection error - let the app start and retry
+            // Connection pool settings (pg driver options)
             extra: {
               max: 10, // Max pool size
-              connectionTimeoutMillis: 30000,
+              connectionTimeoutMillis: 30000, // Timeout for getting connection from pool (30 seconds)
+              idleTimeoutMillis: 30000, // Timeout for idle connections (30 seconds)
             },
           };
         } catch (error) {

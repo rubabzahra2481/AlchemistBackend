@@ -17,7 +17,7 @@ async function bootstrap() {
     console.log('   - DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Missing');
     console.log('   - SUPABASE_URL:', process.env.SUPABASE_URL ? '✅ Set' : '❌ Missing');
     console.log('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing');
-    console.log('   - PORT:', process.env.PORT || '5000 (default)');
+    console.log('   - PORT:', process.env.PORT || '3000 (default)');
     
     console.log('📦 [Bootstrap] Creating NestJS application...');
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
