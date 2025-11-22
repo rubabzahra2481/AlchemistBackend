@@ -6,11 +6,12 @@ import { ParallelLLMService } from './parallel-llm.service';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
 import { ChatResponseDto } from '../dto/chat.dto';
 import { getAllQuotients, getQuotientById } from '../knowledge-base/quotients.data';
+import { ChatRepository } from '../repositories/chat.repository';
 
 @Injectable()
 export class ChatService {
-  // Simple session storage in RAM
-  private sessionStorage = new Map<
+  // Keep in-memory cache for active sessions (optional - for performance)
+  private sessionCache = new Map<
     string,
     {
       history: any[];
@@ -25,38 +26,52 @@ export class ChatService {
     private readonly conversationAnalyzer: ConversationAnalyzerService,
     private readonly parallelLLM: ParallelLLMService,
     private readonly llmOrchestrator: LLMOrchestratorService,
+    private readonly chatRepository: ChatRepository, // ✅ Add repository
   ) {}
 
   /**
    * Main method to process user messages
    * Uses parallel LLM approach with Smart Incremental analysis (Option 2)
+   * @param userId - Unique user ID from Supabase (UUID like "19960af9-a256-4596-aacf-ccb4d54b65d2")
    */
   async processMessage(
     message: string,
     sessionId: string,
     selectedLLM: string = 'gpt-4o',
+    userId?: string, // User ID from Supabase auth
   ): Promise<ChatResponseDto> {
     try {
-      // Get or create session
-      let session = this.sessionStorage.get(sessionId);
-      if (!session) {
-        session = {
-          history: [],
-          profile: null,
-          lastActivity: new Date(),
-        };
-        this.sessionStorage.set(sessionId, session);
+      if (!userId) {
+        throw new Error('User ID is required for chat storage');
       }
 
-      // Update session with new message
-      session.history.push({ role: 'user', content: message });
-      session.lastActivity = new Date();
+      // ✅ Get or create session in database
+      const session = await this.chatRepository.getOrCreateSession(
+        sessionId,
+        userId,
+        selectedLLM,
+      );
 
-      // Get conversation history from session (includes the message we just added)
-      const history = session.history;
+      // ✅ Load existing messages from database
+      const existingMessages = await this.chatRepository.getSessionMessages(sessionId, userId);
+      
+      // ✅ Get next sequence number
+      const nextSequenceNumber = existingMessages.length + 1;
+
+      // ✅ Save user message to database
+      await this.chatRepository.saveUserMessage(sessionId, userId, message, nextSequenceNumber);
+
+      // ✅ Build history array for analysis (from existing messages + new message)
+      const history = [
+        ...existingMessages.map((m) => ({ role: m.role, content: m.content })),
+        { role: 'user' as const, content: message },
+      ];
 
       // Get history WITHOUT the current message (since we pass message separately to analyzers)
-      const historyBeforeCurrent = session.history.slice(0, -1);
+      const historyBeforeCurrent = existingMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
       // NEW: Parallel LLM analysis with classification and selective analysis
       // Pass history WITHOUT the current message (we pass the message separately)
@@ -66,11 +81,6 @@ export class ChatService {
         sessionId,
         selectedLLM,
       );
-
-      // Update session profile
-      if (psychProfile) {
-        session.profile = psychProfile;
-      }
 
       // Analyze conversation patterns across history (for behavioral patterns)
       const conversationInsights = this.conversationAnalyzer.analyzeConversation(history);
@@ -86,7 +96,7 @@ export class ChatService {
       analysis.overallInsights = enhancedInsights;
 
       // Build a cleaned Profile object with confidence/evidence gating and safety/conflict
-      const cleanedProfile = this.buildCleanProfile(session.profile || psychProfile);
+      const cleanedProfile = this.buildCleanProfile(psychProfile);
 
       // Generate personalized advice with cleaned profile and short context
       // Pass history WITHOUT the current message (it's passed separately as userMessage parameter)
@@ -104,8 +114,36 @@ export class ChatService {
         message,
       );
 
-      // Add assistant response to session history
-      session.history.push({ role: 'assistant', content: adviceResult.response });
+      // ✅ Save assistant message to database with all metadata
+      const assistantSequenceNumber = nextSequenceNumber + 1;
+      await this.chatRepository.saveAssistantMessage(
+        sessionId,
+        userId,
+        adviceResult.response,
+        assistantSequenceNumber,
+        selectedLLM,
+        adviceResult.reasoning,
+        analysis,
+        recommendations,
+        cleanedProfile,
+      );
+
+      // ✅ Update session in database (title, profile, message count, last activity)
+      const messageCount = await this.chatRepository.getSessionMessageCount(sessionId);
+      
+      // Auto-generate title from first user message if not set
+      let title = session.title;
+      if (!title && existingMessages.length === 0) {
+        // First message - create title from first 50 characters
+        title = message.length > 50 ? message.substring(0, 50) + '...' : message;
+      }
+
+      await this.chatRepository.updateSession(sessionId, userId, {
+        title,
+        currentProfile: cleanedProfile,
+        messageCount,
+        selectedLLM,
+      });
 
       return {
         response: adviceResult.response,
@@ -865,20 +903,70 @@ export class ChatService {
 
   /**
    * Gets conversation history for a session
+   * @param userId - Ensure user can only access their own sessions
    */
-  getSessionHistory(sessionId: string) {
-    const session = this.sessionStorage.get(sessionId);
-    return session ? session.history : [];
+  async getSessionHistory(sessionId: string, userId?: string): Promise<any[]> {
+    if (!userId) {
+      return [];
+    }
+
+    // ✅ Get messages from database
+    const messages = await this.chatRepository.getSessionMessages(sessionId, userId);
+    return messages.map((m) => ({
+      role: m.role,
+      content: m.content,
+      timestamp: m.createdAt,
+      reasoning: m.reasoning,
+      analysis: m.analysis,
+      profile: m.profileSnapshot,
+      recommendations: m.recommendations,
+    }));
   }
 
   /**
    * Clears a session
+   * @param userId - Ensure user can only delete their own sessions
    */
-  clearSession(sessionId: string) {
-    this.sessionStorage.delete(sessionId);
+  async clearSession(sessionId: string, userId?: string): Promise<void> {
+    if (!userId) {
+      return;
+    }
+
+    // ✅ Delete session from database (cascade delete will remove all messages)
+    await this.chatRepository.deleteSession(sessionId, userId);
+    
     // Also clear from other services for compatibility
     this.personalityAnalyzer.clearHistory(sessionId);
     this.parallelLLM.clearSession(sessionId);
+  }
+
+  /**
+   * Get all sessions for a user
+   * @param userId - Unique user ID from Supabase
+   */
+  async getAllSessions(userId: string) {
+    if (!userId) {
+      return [];
+    }
+
+    // ✅ Get sessions from database
+    const sessions = await this.chatRepository.getUserSessions(userId);
+    // Get last message for each session to show in sidebar
+    const sessionsWithLastMessage = await Promise.all(
+      sessions.map(async (s) => {
+        const lastMessage = await this.chatRepository.getLastMessageForSession(s.id, userId);
+        return {
+          id: s.id,
+          title: s.title || 'Untitled Chat',
+          lastMessage: lastMessage?.content || '',
+          lastActivity: s.lastActivity,
+          messageCount: s.messageCount,
+          createdAt: s.createdAt,
+          selectedLLM: s.selectedLLM,
+        };
+      })
+    );
+    return sessionsWithLastMessage;
   }
 
   /**

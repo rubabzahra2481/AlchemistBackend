@@ -13,12 +13,17 @@ import { OpenAIProvider } from './providers/openai.provider';
 import { ClaudeProvider } from './providers/claude.provider';
 import { DeepSeekProvider } from './providers/deepseek.provider';
 import { GeminiProvider } from './providers/gemini.provider';
+import { SupabaseAuthService } from './services/supabase-auth.service';
+import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
+import { DatabaseModule } from './database/database.module';
+import { ChatRepository } from './repositories/chat.repository';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    DatabaseModule, // ✅ Add database module
   ],
   controllers: [AppController, ChatController],
   providers: [
@@ -33,6 +38,11 @@ import { GeminiProvider } from './providers/gemini.provider';
     DeepSeekProvider,
     GeminiProvider,
     LLMOrchestratorService,
+    // Supabase Auth
+    SupabaseAuthService,
+    SupabaseAuthGuard,
+    // Database
+    ChatRepository, // ✅ Add repository
   ],
 })
 export class AppModule {}

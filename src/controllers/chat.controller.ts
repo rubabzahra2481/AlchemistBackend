@@ -1,38 +1,66 @@
-import { Controller, Post, Body, Get, Param, Delete, Res, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, Get, Param, Delete, Res, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
 import { ChatService } from '../services/chat.service';
 import { RateLimitGuard } from '../guards/rate-limit.guard';
+import { SupabaseAuthGuard } from '../guards/supabase-auth.guard';
+import { UserId } from '../decorators/user.decorator';
 import { v4 as uuidv4 } from 'uuid';
 import { getAvailableLLMs, DEFAULT_LLM } from '../config/llm-models.config';
 
 @ApiTags('chat')
 @Controller('chat')
-@UseGuards(RateLimitGuard)
+@UseGuards(RateLimitGuard, SupabaseAuthGuard) // Add SupabaseAuthGuard to protect all endpoints
+@ApiBearerAuth() // Indicates that this endpoint requires authentication
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Post()
   @ApiOperation({ summary: 'Send a message and get personalized advice' })
   @ApiResponse({ status: 200, description: 'Returns advice and personality analysis' })
-  async chat(@Body() chatRequest: ChatRequestDto): Promise<ChatResponseDto> {
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  async chat(
+    @Body() chatRequest: ChatRequestDto,
+    @UserId() userId: string, // Get user ID from validated token
+  ): Promise<ChatResponseDto> {
     const sessionId = chatRequest.sessionId || uuidv4();
     const selectedLLM = chatRequest.selectedLLM || DEFAULT_LLM;
-    return await this.chatService.processMessage(chatRequest.message, sessionId, selectedLLM);
+    // Pass userId to processMessage - this will be stored with chat history
+    return await this.chatService.processMessage(
+      chatRequest.message,
+      sessionId,
+      selectedLLM,
+      userId,
+    );
   }
 
   @Get('session/:sessionId/history')
   @ApiOperation({ summary: 'Get conversation history for a session' })
-  async getHistory(@Param('sessionId') sessionId: string) {
-    return this.chatService.getSessionHistory(sessionId);
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  async getHistory(
+    @Param('sessionId') sessionId: string,
+    @UserId() userId: string, // Ensure user can only access their own sessions
+  ) {
+    return await this.chatService.getSessionHistory(sessionId, userId);
   }
 
   @Delete('session/:sessionId')
   @ApiOperation({ summary: 'Clear conversation history for a session' })
-  async clearSession(@Param('sessionId') sessionId: string) {
-    this.chatService.clearSession(sessionId);
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  async clearSession(
+    @Param('sessionId') sessionId: string,
+    @UserId() userId: string, // Ensure user can only delete their own sessions
+  ) {
+    await this.chatService.clearSession(sessionId, userId);
     return { message: 'Session cleared successfully' };
+  }
+
+  @Get('sessions')
+  @ApiOperation({ summary: 'Get all chat sessions for the authenticated user' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  async getAllSessions(@UserId() userId: string) {
+    return await this.chatService.getAllSessions(userId);
   }
 
   @Get('quotients')

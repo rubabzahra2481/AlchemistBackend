@@ -21,7 +21,18 @@
     "qa:generate": "ts-node scripts/generate-test-cases.ts",
     "qa:evaluate": "ts-node scripts/evaluate-quality.ts",
     "qa:analyze": "ts-node scripts/analyze-patterns.ts",
-    "qa:full": "npm run qa:generate && npm run qa:evaluate && npm run qa:analyze"
+    "qa:full": "npm run qa:generate && npm run qa:evaluate && npm run qa:analyze",
+    "db:create": "ts-node scripts/create-database.ts",
+    "db:test": "ts-node scripts/test-connection.ts",
+    "db:list": "ts-node scripts/list-databases.ts",
+    "db:check": "ts-node scripts/check-active-database.ts",
+    "db:tables": "ts-node scripts/list-tables-in-db.ts",
+    "db:dates": "ts-node scripts/check-db-creation-dates.ts",
+    "db:test-chat": "ts-node scripts/test-chat-storage.ts",
+    "db:test-repo": "ts-node scripts/test-chat-api.ts",
+    "migration:run": "ts-node scripts/run-migration.ts run",
+    "migration:revert": "ts-node scripts/run-migration.ts revert",
+    "migration:show": "ts-node scripts/run-migration.ts show"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",
@@ -31,6 +42,8 @@
     "@nestjs/core": "^10.3.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/swagger": "^7.1.17",
+    "@nestjs/typeorm": "^11.0.0",
+    "@supabase/supabase-js": "^2.84.0",
     "axios": "^1.12.2",
     "chromadb": "^1.10.5",
     "class-transformer": "^0.5.1",
@@ -38,8 +51,10 @@
     "dotenv": "^17.2.3",
     "node-fetch": "^3.3.2",
     "openai": "^4.20.1",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.1",
+    "typeorm": "^0.3.27",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
