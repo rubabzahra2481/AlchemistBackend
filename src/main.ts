@@ -79,7 +79,7 @@ async function bootstrap() {
         /\.amplifyapp\.com$/, // Allow any Amplify domain
         /\.elasticbeanstalk\.com$/, // Allow Elastic Beanstalk domains
       ],
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
     });
 

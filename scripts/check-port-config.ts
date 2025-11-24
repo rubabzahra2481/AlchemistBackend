@@ -76,3 +76,7 @@ console.log('   └────────────────────�
 
 console.log('\n✅ To fix: Make health check use PORT env var or remove hardcoded port');
 
+
+
+
+

@@ -962,6 +962,29 @@ export class ChatService {
   }
 
   /**
+   * Rename a chat session
+   * @param sessionId - Session ID to rename
+   * @param userId - User ID to verify ownership
+   * @param newTitle - New title for the session
+   */
+  async renameSession(sessionId: string, userId: string, newTitle: string): Promise<void> {
+    if (!userId || !newTitle || !newTitle.trim()) {
+      throw new Error('User ID and title are required');
+    }
+
+    // Check if session exists and user owns it
+    const session = await this.chatRepository.getSessionById(sessionId, userId);
+    if (!session) {
+      throw new Error('Session not found or you do not have permission to rename it');
+    }
+
+    // Update session title (session existence already verified above)
+    await this.chatRepository.updateSession(sessionId, userId, {
+      title: newTitle.trim(),
+    });
+  }
+
+  /**
    * Get all sessions for a user
    * @param userId - Unique user ID from Supabase
    */

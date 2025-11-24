@@ -178,3 +178,7 @@ After making these changes:
 - **Database:** Based on your earlier conversation, tables are in the `postgres` database.
 - **Security:** Consider storing sensitive values (like DATABASE_URL) in AWS Secrets Manager instead of plain environment variables.
 
+
+
+
+

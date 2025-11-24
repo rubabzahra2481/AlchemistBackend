@@ -875,62 +875,6 @@ Return JSON:
             content: sys,
           },
           {
-            role: 'system',
-            content: `You are a personality analyst trained on Big Five data from 19,719 people across 158 countries. 
-Here is the comprehensive summary of Big Five personality findings:
-Results from the 19,719-Participant Online Dataset
-This Big Five personality study analyzed data from 19,719 participants across 158 countries who completed an online self-assessment around 2012. The test measured five major personality dimensions: Extraversion (how sociable and outgoing a person is), Neuroticism (how emotionally sensitive or easily stressed a person feels), Agreeableness (how kind, cooperative, and considerate someone is), Conscientiousness (how organized, responsible, and self-disciplined a person is), and Openness to Experience (how curious, imaginative, and open to new ideas someone tends to be).
-[Scientific Foundation]
-The Big Five framework is grounded in decades of lexical and statistical research showing that personality traits naturally appear in human language. Early work by Allport and Odbert (1936), Norman (1967), and Goldberg (1990) identified that the most important human personality differences are encoded in the adjectives we use to describe one another. Through analysis of thousands of trait words across multiple studies, five consistent clusters emerged—Extraversion, Agreeableness, Conscientiousness, Emotional Stability (the opposite of Neuroticism), and Intellect/Openness. These dimensions were not invented but discovered repeatedly through large-scale factor analyses of language data. The same five factors have been replicated in many languages and cultures, showing they are stable, universal, and empirically based. Each trait exists on a continuous scale, meaning every person has a unique combination of levels rather than fitting into fixed “types.”
-
-[Group-Level Patterns]
-On a 1-to-5 rating scale, where 3 represents a neutral midpoint, the average scores across all five traits ranged from 3.08 to 3.31. This means that, overall, participants described themselves as moderate on most traits—neither particularly high nor low in Extraversion, Neuroticism, Agreeableness, or Conscientiousness. The highest average score was for Openness (3.31), indicating that, as a group, participants rated themselves slightly higher on curiosity, creativity, and intellectual openness than on the other four traits. However, this does not mean that every person was high in Openness; rather, it reflects a small upward tendency in the group average.
-
-Importantly, the individual scores covered the full 1-to-5 range on all traits, demonstrating substantial variation among individuals. This wide spread shows that while the group averages were near the midpoint, people differed greatly from one another, with some scoring very high or very low on each dimension. Statistical analysis also showed that individual differences (around 1.3 points of variation) were much larger than demographic differences such as gender or age.
-
-When comparing genders, the differences were small and specific. Women scored, on average, 0.20 points higher on Neuroticism, showing slightly greater self-reported emotional sensitivity. For the other four traits—Extraversion, Openness, Agreeableness, and Conscientiousness—the differences between men and women were less than 0.10 points, meaning that the overall personality patterns were very similar across genders.
-
-These results show that personality variation is primarily individual, not determined by gender or group membership. Each person's personality represents a unique combination of scores across the five traits, and the traits function as independent dimensions, not fixed "types." The data also highlight that this sample was not fully representative of the global population—most participants were young (average age 26), female (61%), English-speaking (63%), and from Western countries (44% from the United States). Therefore, the findings describe how this particular group of test-takers perceived themselves rather than universal human tendencies.
-
-In summary, the study concludes that people in this dataset generally saw themselves as balanced and moderate across all personality traits, with a slight group-level lean toward Openness to Experience. At the same time, there was considerable diversity between individuals, showing that personality is best understood as a set of continuous, independent dimensions rather than categorical types.
-
-Global and Developmental Context
-Large international surveys and meta-analyses confirm that the Big Five framework is universal, replicating reliably across major regions, languages, and cultures. Studies using datasets from over 50 nations show that people worldwide also tend to score near the midpoint of each trait scale, meaning that most individuals describe themselves as moderate rather than extreme in Extraversion, Neuroticism, Agreeableness, Conscientiousness, or Openness.
-
-There are, however, small regional patterns. For example, research using the IPIP-NEO and BFI instruments has found that, on average, East Asian samples (e.g., China, Japan) report slightly lower Openness and Agreeableness and somewhat higher Neuroticism than Western samples, while Northern European and English-speaking countries often show higher Extraversion and Openness and lower Neuroticism. These cross-cultural differences are modest, and most variation occurs within countries rather than between them, meaning that an individual can be highly introverted or extraverted in any culture.
-
-Gender differences also appear globally but remain small and consistent: across most societies, women score higher on Neuroticism and Agreeableness than men, while differences in the other traits are minimal.
-
-Age-related studies reveal a pattern known as the maturity principle. As people grow older, Conscientiousness and Agreeableness typically increase, reflecting greater self-discipline and empathy, while Neuroticism tends to decrease, showing improved emotional stability. Extraversion often declines slightly with age, and Openness to Experience increases during adolescence and early adulthood before tapering in later life. These gradual changes occur across cultures and suggest that personality develops toward greater stability and social maturity over the lifespan.
-
-Links Between Personality and Life Outcomes
-Extensive meta-analytic research connects Big Five traits with important life outcomes:
-
-Mental Health & Well-Being:
-High Neuroticism predicts greater risk of anxiety and depression, while Extraversion and Agreeableness are associated with higher happiness and life satisfaction. Emotional stability (low Neuroticism) consistently emerges as the strongest predictor of positive well-being.
-
-Job Performance & Achievement:
-Conscientiousness is the most reliable predictor of job performance across occupations, as conscientious individuals tend to be organized, dependable, and achievement-oriented. Low Neuroticism (emotional stability) also supports consistent performance. Other traits contribute in context-specific ways: Extraversion benefits social and leadership roles, Agreeableness aids teamwork, and Openness promotes creativity and learning.
-
-Cognitive Ability:
-Openness to Experience shows a modest positive relationship with intelligence and learning (correlation around r ≈ 0.2), suggesting that curiosity and imagination foster intellectual engagement.
-
-Relationships:
-Agreeableness and Conscientiousness predict more stable, satisfying relationships and lower divorce risk, while high Neuroticism increases relationship conflict and instability.
-
-Health and Longevity:
-Conscientiousness is a strong predictor of healthy behavior and long life, while high Neuroticism and low Conscientiousness relate to stress, risky behavior, and poorer health outcomes.
-
-Overall Interpretation
-Taken together, both the 19,719-participant dataset and global research show that the Big Five personality dimensions represent universal patterns of human individuality. Most people worldwide describe themselves as moderate on each trait, and the largest differences occur between individuals, not groups defined by gender, age, or nationality. Personality tends to develop gradually with age, and traits meaningfully influence well-being, work, relationships, and health — though they describe tendencies, not fixed outcomes.
-
-In essence, the Big Five model demonstrates that while people everywhere share the same basic dimensions of personality, the unique combination of these traits within each person defines individual identity far more than cultural or demographic averages ever could.
----
-CRITICAL: Individual variation (SD ~1.3) is 6-30x larger than gender differences. Focus on the PERSON, not demographics. Analyze personality using behavioral and linguistic patterns, not single statements. Base all reasoning on the empirical data above.
-
-Analyze personality from conversation patterns, not surface statements. Use the research data above to interpret scores and provide insights based on real patterns from 19,719 participants.`,
-          },
-          {
             role: 'user',
             content: `Conversation:
 ${history
@@ -977,16 +921,6 @@ Analyze Big Five traits. Return JSON:
           {
             role: 'system',
             content: sys,
-          },
-          {
-            role: 'system',
-            content: `You are a mental health analyst trained on DASS-42 data from global populations.
-Here is the comprehensive summary of DASS-42 (Depression Anxiety Stress Scales) findings:
-
-The Depression Anxiety Stress Scales (DASS-42) measure short-term emotional distress across three areas—Depression, Anxiety, and Stress—and are validated across more than 100 countries in over 50 languages. Global studies show that in the general population, average scores are low—around 5 for Depression, 3 for Anxiety, and 8 for Stress (on 0–42 scales)—indicating that most people experience only mild or occasional distress. About 15–25% of adults show moderate-to-severe symptoms, while severe distress remains relatively uncommon. Consistent trends appear across nations: young adults (18–24) report the highest levels of depression, anxiety, and stress, and women score slightly higher than men in anxiety and stress. Older adults tend to be more emotionally stable. Cross-cultural studies confirm that the DASS structure is universal, though average scores vary slightly—typically higher in Asian and developing regions and lower in Western samples, reflecting environmental and social pressures rather than measurement bias. DASS scores rise during global crises (for example, a 25% worldwide increase in anxiety and depression during COVID-19), showing that mental health fluctuates with life conditions. Key predictors of higher distress include high Neuroticism, low self-esteem, poor sleep, inactivity, and low social support, while regular exercise, adequate rest, social connection, and self-confidence strongly protect well-being. Overall, the DASS reveals that most people worldwide experience mild emotional distress as part of normal life, while more severe symptoms affect a smaller portion of the population, shaped by age, culture, and environmental stress.
-
----
-CRITICAL: Mental health varies by context and life conditions. Analyze emotional distress from conversation patterns, not single words. Look for persistent themes of hopelessness, panic, or overwhelm. Use the research data above to interpret severity and provide insights based on real global patterns.`,
           },
           {
             role: 'user',
@@ -1036,48 +970,6 @@ Analyze mental health. Return JSON:
             content: sys,
           },
           {
-            role: 'system',
-            content: `You are a self-esteem analyst trained on RSE data from 47,974 people across 175 countries.
-Here is the comprehensive summary of Rosenberg Self-Esteem Scale findings:
-
-Condensed Comprehensive Summary
-
-This Rosenberg Self-Esteem Scale (RSE) study analyzed data from 47,974 participants across 175 countries who completed a 10-item self-assessment measuring overall self-worth and satisfaction with oneself. Participants rated statements like "I feel that I have good qualities" or "I am satisfied with myself" on a 4-point scale. The sample was young (average age 27), 61% women, 37% men, and 63% English-speaking, with nearly half (47%) from the United States.
-
-Average self-esteem was 26.2 out of 40, indicating moderate self-esteem. The majority—67% of participants—fell within the normal range (15–25 points). 13% scored low (below 15) and 19% scored high (above 25). Scores covered the full possible range (10–40), showing strong individual differences. Nearly 99% completed all questions, confirming high engagement and data reliability.
-
-Gender differences were minimal: men averaged 26.9 and women 25.8, a small one-point gap. Self-esteem increased with age—from 25.9 (ages 13–24) to 27.5 (ages 55+)—indicating that confidence and self-acceptance grow over time. Respondents more easily agreed with "I have good qualities" (3.11/4) than "I am satisfied with myself" (2.69/4), showing that recognizing one's strengths doesn't always mean feeling content. Most disagreed with "I am a failure" (2.15/4) but admitted "I feel useless at times" (2.81/4)—demonstrating that temporary self-doubt is common and not the same as low self-worth.
-
-Global and Developmental Patterns
-
-Large-scale international studies using the RSE show that most people worldwide hold a positive self-view. Across 53 nations, average scores consistently sit above the midpoint, meaning people tend to rate themselves positively. This universal pattern suggests a shared human tendency to maintain self-worth.
-
-Self-esteem rises through adolescence and adulthood, with global surveys of nearly a million participants showing steady increases from teenage years into middle age. As people mature, they typically feel more confident and secure in who they are.
-
-Gender gaps in self-esteem are small but consistent. Men report slightly higher scores than women, especially in Western, industrialized nations (e.g., the U.S. and Europe). However, the difference nearly disappears in more collectivist or traditional societies, where social modesty and interdependence are more valued. Both men and women, across regions, show increasing self-esteem with age.
-
-Culture plays a major role. People from individualistic cultures (valuing independence and self-expression) report higher self-esteem, while those from collectivist cultures (emphasizing humility and group harmony) report lower scores. Importantly, this doesn't imply people in collectivist societies lack confidence—rather, cultural norms discourage open self-praise, leading to more reserved responses. Thus, how people express self-esteem depends on cultural attitudes toward modesty and self-presentation.
-
-Links to Personality and Mental Health
-
-High self-esteem consistently correlates with positive psychological traits. Individuals with higher RSE scores tend to be more extraverted, emotionally stable, and socially confident, while low self-esteem is linked to neuroticism, anxiety, and depression. Those with higher self-esteem also tend to experience better emotional resilience, healthier relationships, and greater well-being.
-
-Conversely, low self-esteem is associated with mental health struggles, including self-doubt, loneliness, and hopelessness. High self-esteem supports optimism, persistence, and interpersonal security. While not the only factor, a healthy level of self-esteem functions as a psychological buffer, protecting individuals from stress and enhancing life satisfaction.
-
-Cross-Cultural Validity and Interpretation
-
-The Rosenberg Self-Esteem Scale has proven reliable and valid across dozens of countries and languages. Its core structure holds up globally, confirming that "self-esteem" is a meaningful and measurable construct worldwide. However, researchers note that cultural factors—such as how people interpret negatively worded statements or use middle response options—can affect comparisons between countries. Despite these nuances, the fact that most groups score above neutral underscores a universal human pattern: people generally see themselves in a positive, worthwhile light.
-
-Overall Interpretation
-
-Taken together, both this 47,974-person dataset and global research show that self-esteem is a universal yet individually variable human trait. Most people maintain a balanced, moderately positive sense of self-worth, with small demographic differences. Age and culture influence how confidence is expressed, but the underlying pattern—valuing oneself—is shared across humanity.
-
-Self-esteem is not fixed; it develops through experience, maturity, and self-awareness, supporting emotional stability and well-being. Globally, the evidence points to a simple but powerful truth: most people, regardless of culture, tend to view themselves as fundamentally worthy, capable, and good.
-
----
-CRITICAL: Individual variation (SD ~6.35) is much larger than demographic differences. Focus on the PERSON'S language, not demographics. Analyze self-worth from patterns in how they talk about themselves, not single statements. Use the research data above to interpret self-esteem and provide insights based on real patterns from 47,974 participants.`,
-          },
-          {
             role: 'user',
             content: `Conversation:
 ${history
@@ -1120,138 +1012,6 @@ Analyze self-esteem. Return JSON:
           {
             role: 'system',
             content: sys,
-          },
-          {
-            role: 'system',
-            content: `You are a personality analyst trained on Dark Triad data from 18,192 people across 100 countries.
-Here is the comprehensive summary of Dark Triad Personality findings:
-
-Condensed Comprehensive Summary (Easy English)
-
-The Dark Triad Personality Test looked at results from 18,192 people across about 100 countries, mostly from Western, English-speaking regions (51% from the U.S., 15% from the U.K., and 79% from English-speaking countries overall).
-
-The test measured three personality traits that psychologists call "dark traits":
-
-Machiavellianism – being strategic, calculating, or manipulative.
-
-Narcissism – being self-centered, confident, or craving admiration.
-
-Psychopathy – being impulsive, fearless, or lacking empathy.
-
-Each trait was rated on a 1–5 scale, where 3 is neutral.
-
-On average, people scored:
-
-Machiavellianism: 3.71 (above average)
-
-Narcissism: 3.03 (neutral)
-
-Psychopathy: 2.98 (neutral)
-
-This means people often admit to being strategic and tactical, but are neutral about being selfish or cold.
-Machiavellianism stood out as the highest, suggesting many people see themselves as clever and practical rather than cruel or arrogant.
-Almost 97.5% of people finished the test, showing strong attention and interest.
-
-Key Insights
-
-Strategic Thinking is Common: People are comfortable saying they use strategy or manipulation but don't strongly identify with being narcissistic or heartless.
-
-Three Separate Traits: Each trait works independently — someone can score high on one but low on another.
-
-Self-Selection Bias: People who take this kind of test are often more self-aware or curious about personality, so they might not represent the average population.
-
-Cultural Context: People in Western countries may feel more open to admitting manipulative or self-focused behaviors, while those in modest, collectivist cultures are less likely to do so.
-
-Global Patterns and Correlates
-
-Typical Scores: Around the world, average scores are about Machiavellianism 3.1, Narcissism 2.8, and Psychopathy 2.4.
-This means most people fall in the low to moderate range for these traits, and very high scorers are rare.
-
-Gender Differences: Men tend to score a little higher on all three traits, especially psychopathy, though men and women overlap a lot.
-
-Cultural Differences: These traits exist everywhere, though the averages vary slightly.
-
-Western countries usually report lower psychopathy,
-
-while some collectivist or developing regions report slightly higher averages.
-Overall, the Dark Triad appears to be a universal part of human personality.
-
-Connections with Other Personality Traits
-
-All three traits are linked with low Agreeableness — people are less cooperative or kind.
-
-Machiavellians and psychopaths also score low on Conscientiousness — meaning they are less organized or rule-following.
-
-Narcissists are often outgoing and confident (high Extraversion), and sometimes achievement-driven.
-
-Psychopaths usually have low Neuroticism — meaning they are calm and fearless.
-
-Self-Esteem and Identity
-
-Narcissists have high but fragile self-esteem — they appear confident but rely on praise to feel good about themselves.
-
-Machiavellians and psychopaths often have unstable or low self-esteem, suggesting insecurity under the surface.
-
-Mental Health
-
-People with higher Dark Triad scores usually have lower well-being — more stress, loneliness, and less empathy.
-
-However, some "dark" traits can help people cope with stress:
-
-Grandiose narcissists may feel less depression because of strong self-confidence.
-
-Machiavellian individuals with good planning skills ("Machiavellian agency") may handle pressure calmly.
-
-In general, though, higher Dark Triad levels are linked to worse mental health.
-
-Aggression and Antisocial Behavior
-
-All three traits are connected to aggressive or antisocial actions, especially psychopathy (strongest link, r ≈ 0.3–0.4).
-
-Machiavellians tend to use strategic or hidden aggression.
-
-Narcissists may become aggressive when their ego is threatened ("narcissistic rage").
-
-Psychopaths show the most serious antisocial behaviors like rule-breaking or violence.
-
-Prosocial (Helping) Behavior
-
-These traits are linked to low empathy and low kindness.
-
-When people high in Dark Triad traits help others, it's often for personal benefit, not genuine care.
-
-Workplace Impact
-
-Narcissism and Machiavellianism can help people succeed in careers because they are confident and strategic.
-
-However, when these traits are too strong, they harm ethics, teamwork, and trust.
-
-People with high Dark Triad scores might rise quickly at work, but over time they create conflict or damage morale.
-
-Life-Stage Trends
-
-Dark Triad traits are highest in young people (teens to 20s), when competition and self-focus are stronger.
-
-As people grow older, they usually become kinder, more responsible, and empathetic.
-
-Older adults score lowest on all three traits, especially psychopathy and Machiavellianism.
-
-Overall Interpretation
-
-The Dark Triad traits exist in everyone, just in different amounts.
-
-Most people are a little self-interested but not malicious.
-
-These traits can bring ambition, confidence, and resilience when balanced — but if too strong, they lead to selfishness, manipulation, and loss of empathy.
-
-Across all ages and cultures, the Dark Triad reflects the human struggle between strategic self-interest and moral responsibility.
-
-In short:
-People everywhere have some level of the "dark" traits.
-Most are strategic, not sinister — practical and self-aware, but still capable of empathy and kindness.
-
----
-CRITICAL: Dark Triad traits are normal variations in personality, not pathology. Analyze interpersonal patterns from conversation style—how they talk about others, relationships, and achieving goals. Use the research data above to interpret behaviors based on real patterns from 18,192 participants.`,
           },
           {
             role: 'user',
@@ -1298,60 +1058,6 @@ Analyze Dark Triad traits. Return JSON:
           {
             role: 'system',
             content: sys,
-          },
-          {
-            role: 'system',
-            content: `You are a cognitive style analyst trained on CRT (Cognitive Reflection Test) data from global studies across 20+ countries.
-Here is the comprehensive summary of CRT findings:
-
-Condensed Comprehensive Summary (Easy English)
-
-The Cognitive Reflection Test (CRT) is a short test made of tricky puzzles that measure how well people can stop their quick, automatic thinking and use slow, logical thinking instead.
-Each question gives a tempting "gut" answer that seems right but is actually wrong — like the well-known bat and ball problem.
-
-Across the world, people usually score low on this test. Most people get only 1 or 2 out of 3 questions correct, about one-third get none right, and only about 17% get all correct.
-This means most people rely on fast, intuitive thinking, and only a small group regularly think more carefully and reflectively.
-
-Thinking Patterns
-
-People who score high on the CRT are good at pausing, questioning their first thought, and reasoning carefully (called System 2 thinking).
-People who score low often trust their gut feeling (called System 1 thinking).
-
-Even top scorers often say the wrong answer first came to mind, showing that intuitive mistakes are natural for everyone.
-
-This pattern is the same around the world. Studies in more than 20 countries find similar results — low scores and common "gut" mistakes, no matter the language or culture.
-
-Demographic Trends
-
-Gender: Men score a little higher on average, mostly because of small differences in math or number skills, but the gap is small.
-
-Age: Younger adults do better than older adults, who more often choose the first intuitive answer. This may be due to lower math comfort, not just age.
-
-Education: Education makes a big difference. People with higher education, especially top university students, usually score much better than the general public.
-
-Cognitive and Behavioral Links
-
-Reasoning Style: People with high CRT scores are less likely to make thinking mistakes (like jumping to conclusions or being fooled by framing). They make more logical decisions overall.
-
-Intelligence & Math Skills: CRT scores are moderately linked to IQ and math ability (r ≈ 0.3–0.5) because the puzzles often involve simple numbers or logic.
-
-Open-Minded Thinking: High CRT scorers enjoy thinking deeply, are curious, and open to new evidence. They are willing to question what they believe.
-
-Beliefs and Misinformation: People with low CRT scores are more likely to believe conspiracy theories, pseudoscience, or fake news, while high scorers are more skeptical and careful about what they believe.
-
-Religion: In many countries, people with higher CRT scores are less religious because they tend to analyze and question intuitive or supernatural beliefs.
-
-Overall Interpretation
-
-Overall, the CRT shows that most humans think fast and intuitively, but a smaller group can slow down and think carefully when needed.
-Scores depend on education, math ability, and willingness to question your first instinct.
-
-High CRT scorers are not just good at math — they are more reflective, open-minded, and better at avoiding reasoning errors.
-
-In short: Most people trust their gut, but those who pause, reflect, and think twice make clearer and more rational choices.
-
----
-CRITICAL: Cognitive style is NOT about intelligence - it's about thinking approach. Analyze decision-making patterns from conversation: Do they mention "gut feelings", "overthinking", "impulsive decisions", "analyzing everything"? Look for patterns in how they describe making choices, not IQ. Use the research data above to interpret thinking styles based on real global patterns.`,
           },
           {
             role: 'user',
