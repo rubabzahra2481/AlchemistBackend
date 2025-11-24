@@ -1,29 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import * as jwt from 'jsonwebtoken';
 
 @Injectable()
 export class SupabaseAuthService {
-  private supabase: SupabaseClient;
+  private agentJwtSecret: string;
 
   constructor(private configService: ConfigService) {
     try {
-      console.log('🔐 [SupabaseAuthService] Initializing Supabase client...');
-      const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-      const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+      console.log('🔐 [SupabaseAuthService] Initializing Agent token verification...');
+      const secret = this.configService.get<string>('AGENT_JWT_SECRET');
 
-      console.log('🔐 [SupabaseAuthService] SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing');
-      console.log('🔐 [SupabaseAuthService] SUPABASE_ANON_KEY:', supabaseKey ? '✅ Set' : '❌ Missing');
+      console.log('🔐 [SupabaseAuthService] AGENT_JWT_SECRET:', secret ? '✅ Set' : '❌ Missing');
 
-      if (!supabaseUrl || !supabaseKey) {
-        const missing: string[] = [];
-        if (!supabaseUrl) missing.push('SUPABASE_URL');
-        if (!supabaseKey) missing.push('SUPABASE_ANON_KEY');
-        throw new Error(`${missing.join(' and ')} must be set in environment variables`);
+      if (!secret) {
+        throw new Error('AGENT_JWT_SECRET must be set in environment variables');
       }
 
-      this.supabase = createClient(supabaseUrl, supabaseKey);
-      console.log('✅ [SupabaseAuthService] Supabase client initialized successfully');
+      this.agentJwtSecret = secret;
+
+      console.log('✅ [SupabaseAuthService] Agent token verification initialized successfully');
     } catch (error) {
       console.error('❌ [SupabaseAuthService] Failed to initialize:', error);
       throw error;
@@ -31,40 +27,50 @@ export class SupabaseAuthService {
   }
 
   /**
-   * Validate Supabase JWT token and extract user ID
-   * @param token - JWT token from Authorization header
+   * Validate Agent JWT token and extract user ID
+   * @param token - Agent JWT token from Authorization header
    * @returns User ID (UUID string)
    * @throws Error if token is invalid or expired
    */
   async getUserIdFromToken(token: string): Promise<string> {
     try {
-      console.log('🔐 [SupabaseAuthService] Validating token...');
-      // Verify the JWT token using Supabase's built-in verification
-      const { data: { user }, error } = await this.supabase.auth.getUser(token);
+      console.log('🔐 [SupabaseAuthService] Validating Agent token...');
+      
+      // Verify the Agent JWT token
+      const decoded = jwt.verify(token, this.agentJwtSecret) as any;
 
       console.log('🔐 [SupabaseAuthService] Token validation result:', { 
-        hasUser: !!user, 
-        hasError: !!error,
-        errorMessage: error?.message,
-        userId: user?.id 
+        hasDecoded: !!decoded,
+        tokenType: decoded?.type,
+        userId: decoded?.userId 
       });
 
-      if (error || !user) {
-        const errorMsg = `Invalid token: ${error?.message || 'User not found'}`;
+      // Check token type
+      if (decoded.type !== 'agent_access') {
+        const errorMsg = `Invalid token type: ${decoded.type || 'unknown'}`;
         console.error('❌ [SupabaseAuthService] Token validation failed:', errorMsg);
         throw new Error(errorMsg);
       }
 
-      if (!user.id) {
-        console.error('❌ [SupabaseAuthService] User ID not found in user object');
+      // Extract user ID from token payload
+      if (!decoded.userId) {
+        console.error('❌ [SupabaseAuthService] User ID not found in token payload');
         throw new Error('User ID not found in token');
       }
 
-      console.log('✅ [SupabaseAuthService] Token validated successfully. User ID:', user.id);
-      return user.id;
+      console.log('✅ [SupabaseAuthService] Agent token validated successfully. User ID:', decoded.userId);
+      return decoded.userId;
     } catch (error) {
       console.error('❌ [SupabaseAuthService] Token validation error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('expired')) {
+        throw new Error('Token has expired. Please refresh your session.');
+      } else if (errorMessage.includes('invalid')) {
+        throw new Error('Invalid token. Please log in again.');
+      }
+      
       throw new Error(`Token validation failed: ${errorMessage}`);
     }
   }
