@@ -3,10 +3,15 @@ import { PersonalityAnalysis, QuotientScore } from '../dto/chat.dto';
 import { QUOTIENTS_KNOWLEDGE_BASE, getQuotientById } from '../knowledge-base/quotients.data';
 import { HumanProfile } from './human-understanding.service';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
+import { CreditService } from './credit.service';
+import { isPremiumModel } from '../config/subscription.config';
 
 @Injectable()
 export class AdviceGeneratorService {
-  constructor(private llmOrchestrator: LLMOrchestratorService) {}
+  constructor(
+    private llmOrchestrator: LLMOrchestratorService,
+    private creditService: CreditService,
+  ) {}
 
   /**
    * Generate advice with clean psychological profile using orchestrator
@@ -16,6 +21,8 @@ export class AdviceGeneratorService {
     profile: any,
     conversationHistory: any[],
     selectedLLM: string = 'gpt-4o',
+    sessionId?: string,
+    userId?: string,
   ): Promise<{ response: string; reasoning?: string }> {
     // Note: Crisis detection happens in parallel-llm.service.ts (safety gate)
     // The crisis indicators are stored in profile.safety and profile.dass.requiresCrisisResponse
@@ -47,6 +54,43 @@ export class AdviceGeneratorService {
           response_format: 'json_object', // Force JSON output for OpenAI
         },
       );
+
+      // Track token usage for advice generation
+      if (userId && sessionId && llmResponse.usage) {
+        try {
+          const inputTokens = llmResponse.usage.prompt_tokens || llmResponse.usage.input_tokens || 0;
+          const outputTokens = llmResponse.usage.completion_tokens || llmResponse.usage.output_tokens || 0;
+          const totalTokens = llmResponse.usage.total_tokens || (inputTokens + outputTokens);
+
+          if (totalTokens > 0) {
+            await this.creditService.recordTokenUsage(
+              userId,
+              sessionId,
+              totalTokens,
+              inputTokens,
+              outputTokens,
+              selectedLLM,
+              'advice',
+              null,
+            );
+
+            // Check if premium model and record premium reply usage
+            if (isPremiumModel(selectedLLM)) {
+              const premiumCheck = await this.creditService.canUsePremiumModel(userId);
+              if (premiumCheck.allowed && premiumCheck.cost) {
+                // Pay-per-use premium reply
+                await this.creditService.recordPremiumReplyUsage(userId, sessionId, premiumCheck.cost);
+              } else if (premiumCheck.allowed) {
+                // Included premium reply (quota)
+                await this.creditService.recordPremiumReplyUsage(userId, sessionId, 0);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ [AdviceGenerator] Failed to track tokens:', error);
+          // Don't throw - continue even if tracking fails
+        }
+      }
 
       let fullResponse = llmResponse.content || "I'm here to listen. What's on your mind?";
 

@@ -35,6 +35,9 @@ export class SupabaseAuthService {
   async getUserIdFromToken(token: string): Promise<string> {
     try {
       console.log('🔐 [SupabaseAuthService] Validating Agent token...');
+      console.log('🔐 [SupabaseAuthService] Token length:', token?.length || 0);
+      console.log('🔐 [SupabaseAuthService] Token preview:', token?.substring(0, 20) + '...');
+      console.log('🔐 [SupabaseAuthService] Secret configured:', !!this.agentJwtSecret);
       
       // Verify the Agent JWT token
       const decoded = jwt.verify(token, this.agentJwtSecret) as any;
@@ -42,12 +45,15 @@ export class SupabaseAuthService {
       console.log('🔐 [SupabaseAuthService] Token validation result:', { 
         hasDecoded: !!decoded,
         tokenType: decoded?.type,
-        userId: decoded?.userId 
+        userId: decoded?.userId,
+        iat: decoded?.iat,
+        exp: decoded?.exp,
+        expiresAt: decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : null
       });
 
       // Check token type
       if (decoded.type !== 'agent_access') {
-        const errorMsg = `Invalid token type: ${decoded.type || 'unknown'}`;
+        const errorMsg = `Invalid token type: ${decoded.type || 'unknown'}. Expected 'agent_access'`;
         console.error('❌ [SupabaseAuthService] Token validation failed:', errorMsg);
         throw new Error(errorMsg);
       }
@@ -66,11 +72,17 @@ export class SupabaseAuthService {
       
       // Provide more specific error messages
       if (errorMessage.includes('expired')) {
+        console.error('❌ [SupabaseAuthService] Token has expired');
         throw new Error('Token has expired. Please refresh your session.');
+      } else if (errorMessage.includes('invalid signature')) {
+        console.error('❌ [SupabaseAuthService] Invalid token signature - JWT secret mismatch!');
+        throw new Error('Invalid token signature. JWT secret mismatch between Brandscaling and backend.');
       } else if (errorMessage.includes('invalid')) {
+        console.error('❌ [SupabaseAuthService] Invalid token format');
         throw new Error('Invalid token. Please log in again.');
       }
       
+      console.error('❌ [SupabaseAuthService] Unknown validation error:', errorMessage);
       throw new Error(`Token validation failed: ${errorMessage}`);
     }
   }

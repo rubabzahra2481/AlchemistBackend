@@ -3,6 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ChatSession } from '../entities/chat-session.entity';
 import { ChatMessage } from '../entities/chat-message.entity';
+import { UserSubscription } from '../entities/user-subscription.entity';
+import { TokenUsageLog } from '../entities/token-usage-log.entity';
+import { PremiumReplyUsage } from '../entities/premium-reply-usage.entity';
 
 @Module({
   imports: [
@@ -35,7 +38,7 @@ import { ChatMessage } from '../entities/chat-message.entity';
             username: url.username,
             password: url.password,
             database: databaseName,
-            entities: [ChatSession, ChatMessage],
+            entities: [ChatSession, ChatMessage, UserSubscription, TokenUsageLog, PremiumReplyUsage],
             synchronize: false, // ✅ NEVER use synchronize in production - use migrations instead
             ssl: {
               rejectUnauthorized: false, // For Aurora Postgres RDS
@@ -83,7 +86,7 @@ import { ChatMessage } from '../entities/chat-message.entity';
       inject: [ConfigService],
     }),
     // Register repositories for dependency injection
-    TypeOrmModule.forFeature([ChatSession, ChatMessage]),
+    TypeOrmModule.forFeature([ChatSession, ChatMessage, UserSubscription, TokenUsageLog, PremiumReplyUsage]),
   ],
   exports: [TypeOrmModule],
 })

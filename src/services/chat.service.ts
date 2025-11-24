@@ -4,9 +4,12 @@ import { AdviceGeneratorService } from './advice-generator.service';
 import { ConversationAnalyzerService } from './conversation-analyzer.service';
 import { ParallelLLMService } from './parallel-llm.service';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
+import { CreditService } from './credit.service';
+import { SubscriptionService } from './subscription.service';
 import { ChatResponseDto } from '../dto/chat.dto';
 import { getAllQuotients, getQuotientById } from '../knowledge-base/quotients.data';
 import { ChatRepository } from '../repositories/chat.repository';
+import { isPremiumModel } from '../config/subscription.config';
 
 @Injectable()
 export class ChatService {
@@ -26,6 +29,8 @@ export class ChatService {
     private readonly conversationAnalyzer: ConversationAnalyzerService,
     private readonly parallelLLM: ParallelLLMService,
     private readonly llmOrchestrator: LLMOrchestratorService,
+    private readonly creditService: CreditService,
+    private readonly subscriptionService: SubscriptionService,
     private readonly chatRepository: ChatRepository, // ✅ Add repository
   ) {}
 
@@ -80,13 +85,21 @@ export class ChatService {
         timestamp: m.createdAt || new Date(),
       }));
 
+      // Check credits before processing (CreditGuard already checked, but verify here too)
+      const creditCheck = await this.creditService.checkCredits(userId);
+      if (!creditCheck.allowed) {
+        throw new Error(creditCheck.message || 'Credit limit reached');
+      }
+
       // NEW: Parallel LLM analysis with classification and selective analysis
       // Pass history WITHOUT the current message (we pass the message separately)
+      // Now includes userId for framework cap enforcement
       const psychProfile = await this.parallelLLM.analyze(
         message,
         historyBeforeCurrent,
         sessionId,
         selectedLLM,
+        userId, // Pass userId for credit checking and framework caps
       );
 
       // Analyze conversation patterns across history (for behavioral patterns)
@@ -105,13 +118,26 @@ export class ChatService {
       // Build a cleaned Profile object with confidence/evidence gating and safety/conflict
       const cleanedProfile = this.buildCleanProfile(psychProfile);
 
+      // Check if premium model is allowed before generating advice
+      const premiumCheck = await this.creditService.canUsePremiumModel(userId);
+      let finalLLM = selectedLLM;
+      if (isPremiumModel(selectedLLM)) {
+        if (!premiumCheck.allowed) {
+          // Fallback to default mid model if premium not allowed
+          console.log(`⚠️ [ChatService] Premium model ${selectedLLM} not allowed, using gpt-4o`);
+          finalLLM = 'gpt-4o';
+        }
+      }
+
       // Generate personalized advice with cleaned profile and short context
       // Pass history WITHOUT the current message (it's passed separately as userMessage parameter)
       const adviceResult = await this.adviceGenerator.generateAdviceWithProfile(
         message,
         cleanedProfile,
         historyBeforeCurrent, // Reuse the variable declared above
-        selectedLLM,
+        finalLLM,
+        sessionId,
+        userId,
       );
 
       // Generate context-aware recommendations

@@ -5,16 +5,21 @@ import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
 import { ChatService } from '../services/chat.service';
 import { RateLimitGuard } from '../guards/rate-limit.guard';
 import { SupabaseAuthGuard } from '../guards/supabase-auth.guard';
+import { CreditGuard } from '../guards/credit.guard';
 import { UserId } from '../decorators/user.decorator';
 import { v4 as uuidv4 } from 'uuid';
 import { getAvailableLLMs, DEFAULT_LLM } from '../config/llm-models.config';
+import { CreditService } from '../services/credit.service';
 
 @ApiTags('chat')
 @Controller('chat')
-@UseGuards(RateLimitGuard, SupabaseAuthGuard) // Add SupabaseAuthGuard to protect all endpoints
+@UseGuards(RateLimitGuard, SupabaseAuthGuard, CreditGuard) // Add CreditGuard to check credits
 @ApiBearerAuth() // Indicates that this endpoint requires authentication
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(
+    private readonly chatService: ChatService,
+    private readonly creditService: CreditService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Send a message and get personalized advice' })
@@ -143,6 +148,22 @@ export class ChatController {
     return {
       default: DEFAULT_LLM,
       models: getAvailableLLMs(),
+    };
+  }
+
+  @Get('credits')
+  @ApiOperation({ summary: 'Get credit usage statistics for the authenticated user' })
+  @ApiResponse({ status: 200, description: 'Returns credit usage statistics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
+  async getCredits(@UserId() userId: string) {
+    const stats = await this.creditService.getUsageStats(userId);
+    const creditCheck = await this.creditService.checkCredits(userId);
+    
+    return {
+      ...stats,
+      warning: creditCheck.warning,
+      allowed: creditCheck.allowed,
+      message: creditCheck.message,
     };
   }
 }

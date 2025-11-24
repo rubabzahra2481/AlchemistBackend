@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
+import { CreditService } from './credit.service';
+import { SubscriptionService } from './subscription.service';
+import { selectFrameworksByPriority, SUBSCRIPTION_PLANS } from '../config/subscription.config';
 
 interface Classification {
   hasCrisisIndicators: boolean;
@@ -76,6 +79,8 @@ export class ParallelLLMService {
   constructor(
     private configService: ConfigService,
     private llmOrchestrator: LLMOrchestratorService,
+    private creditService: CreditService,
+    private subscriptionService: SubscriptionService,
   ) {}
 
   // Load and cache KB system prompts (verbatim). If file contains a JSON object
@@ -143,6 +148,69 @@ export class ParallelLLMService {
   }
 
   // Basic JSON parse with fallback extraction and optional retry helper can be added later
+  /**
+   * Helper to extract token counts from LLM response usage object
+   */
+  private extractTokenUsage(usage: any): {
+    total: number;
+    input: number;
+    output: number;
+  } {
+    if (!usage) {
+      return { total: 0, input: 0, output: 0 };
+    }
+
+    // Handle different provider formats
+    const inputTokens = usage.prompt_tokens || usage.input_tokens || usage.totalTokens || 0;
+    const outputTokens = usage.completion_tokens || usage.output_tokens || 0;
+    const totalTokens = usage.total_tokens || (inputTokens + outputTokens);
+
+    return {
+      total: totalTokens,
+      input: inputTokens,
+      output: outputTokens,
+    };
+  }
+
+  /**
+   * Wrapper for LLM calls that automatically tracks token usage
+   */
+  private async callLLMWithTokenTracking(
+    userId: string | undefined,
+    sessionId: string,
+    selectedLLM: string,
+    messages: any[],
+    options: any,
+    callType: string,
+    frameworkName: string | null = null,
+  ): Promise<{ response: any; tokens: number }> {
+    const response = await this.llmOrchestrator.generateResponse(selectedLLM, messages, options);
+    
+    // Extract token counts
+    const tokenUsage = this.extractTokenUsage(response.usage);
+    
+    // Track token usage if userId is provided
+    if (userId && tokenUsage.total > 0) {
+      try {
+        await this.creditService.recordTokenUsage(
+          userId,
+          sessionId,
+          tokenUsage.total,
+          tokenUsage.input,
+          tokenUsage.output,
+          selectedLLM,
+          callType,
+          frameworkName,
+        );
+      } catch (error) {
+        console.error(`❌ [TokenTracking] Failed to record tokens for ${callType}:`, error);
+        // Don't throw - continue even if tracking fails
+      }
+    }
+    
+    return { response, tokens: tokenUsage.total };
+  }
+
   private parseJsonSafe(text: string, fallback: any) {
     if (!text || typeof text !== 'string') return fallback;
 
@@ -193,6 +261,8 @@ export class ParallelLLMService {
     profile: PsychologicalProfile,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<PsychologicalProfile['summaryForThisMessage'] | null> {
     const system = [
       'You create a compact JSON summary for the latest message.',
@@ -226,13 +296,18 @@ export class ParallelLLMService {
     };
 
     try {
-      const res = await this.llmOrchestrator.generateResponse(
+      // Use token tracking for summary LLM call
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: system },
           { role: 'user', content: JSON.stringify(contextObj) },
         ],
         { temperature: 0.1, max_tokens: 350 },
+        'summary',
+        null,
       );
       return this.parseJsonSafe(res.content, null);
     } catch (e) {
@@ -243,12 +318,14 @@ export class ParallelLLMService {
 
   /**
    * Main analysis method - Smart Incremental with Option 2 (Accumulate Over Time)
+   * Now respects framework caps and priority (personality > emotional > crisis)
    */
   async analyze(
     message: string,
     history: any[],
     sessionId: string,
     selectedLLM: string = 'gpt-4o',
+    userId?: string, // User ID for credit checking and framework caps
   ): Promise<PsychologicalProfile | null> {
     try {
       // SESSION ISOLATION: Ensure profile cache is properly isolated per session
@@ -311,7 +388,7 @@ export class ParallelLLMService {
         };
       } else {
         // For everything else: Classify (hybrid)
-        classification = await this.classifyMessage(message, history, selectedLLM);
+        classification = await this.classifyMessage(message, history, selectedLLM, sessionId, userId);
       }
 
       // Safety override: If local check found crisis, ensure it's flagged
@@ -334,37 +411,40 @@ export class ParallelLLMService {
         return this.sessionCache.get(sessionId) || null;
       }
 
-      // Run necessary analyses in parallel
-      const analysisPromises: Promise<any>[] = [];
-      const analysisTypes: string[] = [];
-
-      if (classification.hasCrisisIndicators || classification.hasEmotionalContent) {
-        analysisPromises.push(this.callLLMWithDASSKB(message, history, selectedLLM));
-        analysisTypes.push('dass');
+      // Get framework cap based on user subscription tier
+      let frameworkCap = 8; // Default max (hard cap)
+      if (userId) {
+        const subscription = await this.subscriptionService.getOrCreateSubscription(userId);
+        const plan = SUBSCRIPTION_PLANS[subscription.tier];
+        frameworkCap = plan.frameworkCap;
+        console.log(`🎯 [Framework] User ${userId} tier ${subscription.tier}: framework cap = ${frameworkCap}`);
       }
 
-      if (classification.hasSelfWorthContent || classification.hasCrisisIndicators) {
-        analysisPromises.push(this.callLLMWithRSEKB(message, history, selectedLLM));
-        analysisTypes.push('rse');
-      }
+      // Build list of matched frameworks based on classification
+      const matchedFrameworks: string[] = [];
 
+      // Personality frameworks (highest priority)
       if (classification.hasPersonalityIndicators) {
-        analysisPromises.push(this.callLLMWithBigFiveKB(message, history, selectedLLM));
-        analysisTypes.push('bigFive');
+        matchedFrameworks.push('bigFive');
       }
-
       if (classification.hasDarkTriadIndicators) {
-        analysisPromises.push(this.callLLMWithDarkTriadKB(message, history, selectedLLM));
-        analysisTypes.push('darkTriad');
+        matchedFrameworks.push('darkTriad');
       }
 
+      // Emotional frameworks (medium priority)
+      if (classification.hasCrisisIndicators || classification.hasEmotionalContent) {
+        matchedFrameworks.push('dass');
+      }
+      if (classification.hasSelfWorthContent || classification.hasCrisisIndicators) {
+        matchedFrameworks.push('rse');
+      }
+
+      // Crisis/Cognitive frameworks (lower priority)
       if (classification.hasCognitiveIndicators) {
-        console.log('[CRT] Cognitive indicators detected - triggering CRT analysis');
-        analysisPromises.push(this.callLLMWithCRTKB(message, history, selectedLLM));
-        analysisTypes.push('crt');
+        matchedFrameworks.push('crt');
       }
 
-      // Combine LLM classification flags with keyword triggers
+      // Extra frameworks from keywords
       const extraFromKeywords = this.detectExtraTheoryTriggers(message);
       const extraCombined = {
         hasAttachment: !!(classification.hasAttachment || extraFromKeywords.hasAttachment),
@@ -375,30 +455,50 @@ export class ParallelLLMService {
         hasBioPsych: !!(classification.hasBioPsych || extraFromKeywords.hasBioPsych),
       };
 
-      // Trigger extra theory analyzers based on combined flags
-      if (extraCombined.hasAttachment) {
-        analysisPromises.push(this.callLLMWithAttachmentKB(message, selectedLLM));
-        analysisTypes.push('attachment');
-      }
-      if (extraCombined.hasEnneagram) {
-        analysisPromises.push(this.callLLMWithEnneagramKB(message, selectedLLM));
-        analysisTypes.push('enneagram');
-      }
-      if (extraCombined.hasMBTI) {
-        analysisPromises.push(this.callLLMWithMBTIKB(message, selectedLLM));
-        analysisTypes.push('mbti');
-      }
-      if (extraCombined.hasErikson) {
-        analysisPromises.push(this.callLLMWithEriksonKB(message, selectedLLM));
-        analysisTypes.push('erikson');
-      }
-      if (extraCombined.hasGestalt) {
-        analysisPromises.push(this.callLLMWithGestaltKB(message, selectedLLM));
-        analysisTypes.push('gestalt');
-      }
-      if (extraCombined.hasBioPsych) {
-        analysisPromises.push(this.callLLMWithBioPsychKB(message, selectedLLM));
-        analysisTypes.push('bioPsych');
+      if (extraCombined.hasAttachment) matchedFrameworks.push('attachment');
+      if (extraCombined.hasEnneagram) matchedFrameworks.push('enneagram');
+      if (extraCombined.hasMBTI) matchedFrameworks.push('mbti');
+      if (extraCombined.hasErikson) matchedFrameworks.push('erikson');
+      if (extraCombined.hasGestalt) matchedFrameworks.push('gestalt');
+      if (extraCombined.hasBioPsych) matchedFrameworks.push('bioPsych');
+
+      // Apply priority and cap: personality > emotional > crisis
+      // Also enforce maximum 8 LLM calls total per message
+      const maxFrameworkCalls = Math.min(frameworkCap, 8); // Hard cap at 8
+      const selectedFrameworks = selectFrameworksByPriority(
+        matchedFrameworks,
+        maxFrameworkCalls,
+        classification.hasCrisisIndicators,
+      );
+
+      console.log(`🎯 [Framework] Matched: ${matchedFrameworks.length}, Selected: ${selectedFrameworks.length} (cap: ${maxFrameworkCalls}, hard max: 8)`);
+
+      // Run selected analyses in parallel
+      const analysisPromises: Promise<any>[] = [];
+      const analysisTypes: string[] = [];
+
+      // Map framework names to their LLM calls (now with token tracking)
+      const frameworkCallMap: Record<string, () => Promise<any>> = {
+        dass: () => this.callLLMWithDASSKB(message, history, selectedLLM, sessionId, userId),
+        rse: () => this.callLLMWithRSEKB(message, history, selectedLLM, sessionId, userId),
+        bigFive: () => this.callLLMWithBigFiveKB(message, history, selectedLLM, sessionId, userId),
+        darkTriad: () => this.callLLMWithDarkTriadKB(message, history, selectedLLM, sessionId, userId),
+        crt: () => this.callLLMWithCRTKB(message, history, selectedLLM, sessionId, userId),
+        attachment: () => this.callLLMWithAttachmentKB(message, selectedLLM, sessionId, userId),
+        enneagram: () => this.callLLMWithEnneagramKB(message, selectedLLM, sessionId, userId),
+        mbti: () => this.callLLMWithMBTIKB(message, selectedLLM, sessionId, userId),
+        erikson: () => this.callLLMWithEriksonKB(message, selectedLLM, sessionId, userId),
+        gestalt: () => this.callLLMWithGestaltKB(message, selectedLLM, sessionId, userId),
+        bioPsych: () => this.callLLMWithBioPsychKB(message, selectedLLM, sessionId, userId),
+      };
+
+      // Execute only selected frameworks
+      for (const framework of selectedFrameworks) {
+        const callFn = frameworkCallMap[framework];
+        if (callFn) {
+          analysisPromises.push(callFn());
+          analysisTypes.push(framework);
+        }
       }
 
       const results = await Promise.all(analysisPromises);
@@ -425,6 +525,8 @@ export class ParallelLLMService {
           newProfile,
           history.slice(-3),
           selectedLLM,
+          sessionId,
+          userId,
         );
         if (summary) {
           mergedProfile.summaryForThisMessage = summary;
@@ -569,6 +671,8 @@ export class ParallelLLMService {
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<Classification> {
     try {
       // HYBRID STEP 1: Quick keyword check first (instant, 100% consistent)
@@ -600,7 +704,10 @@ export class ParallelLLMService {
       // HYBRID STEP 2: No keywords found - use LLM for edge cases (80% consistent)
       console.log('[CLASSIFICATION] No keyword match - using LLM for semantic understanding');
 
-      const response = await this.llmOrchestrator.generateResponse(
+      // Use token tracking for classification LLM call
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           {
@@ -819,6 +926,8 @@ Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'classification',
+        null, // No framework name for classification
       );
 
       const llmResult = JSON.parse(response.content || '{}');
@@ -858,16 +967,20 @@ Return JSON:
   }
 
   /**
-   * Analyze personality using Big Five KB
+   * Analyze personality using Big Five KB (with token tracking)
    */
   private async callLLMWithBigFiveKB(
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<any> {
     try {
       const sys = this.getKBPrompt('BIG5_Complete_Analysis.txt');
-      const response = await this.llmOrchestrator.generateResponse(
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           {
@@ -896,6 +1009,8 @@ Analyze Big Five traits. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'framework',
+        'bigFive',
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -912,11 +1027,15 @@ Analyze Big Five traits. Return JSON:
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<any> {
     try {
       const sys = this.getKBPrompt('DASS42_Complete_Analysis.txt');
-      const response = await this.llmOrchestrator.generateResponse(
-        selectedLLM, // Optimized for speed while maintaining quality
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
+        selectedLLM,
         [
           {
             role: 'system',
@@ -943,6 +1062,8 @@ Analyze mental health. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'framework',
+        'dass',
       );
 
       return this.parseJsonSafe(response.content, { concerns: [] });
@@ -959,11 +1080,15 @@ Analyze mental health. Return JSON:
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<any> {
     try {
       const sys = this.getKBPrompt('RSE_Complete_Analysis.txt');
-      const response = await this.llmOrchestrator.generateResponse(
-        selectedLLM, // Optimized for speed while maintaining quality
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
+        selectedLLM,
         [
           {
             role: 'system',
@@ -987,6 +1112,8 @@ Analyze self-esteem. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'framework',
+        'rse',
       );
 
       return this.parseJsonSafe(response.content, { indicators: [] });
@@ -1003,11 +1130,15 @@ Analyze self-esteem. Return JSON:
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<any> {
     try {
       const sys = this.getKBPrompt('DarkTriad_Complete_Analysis.txt');
-      const response = await this.llmOrchestrator.generateResponse(
-        selectedLLM, // Optimized for speed while maintaining quality
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
+        selectedLLM,
         [
           {
             role: 'system',
@@ -1033,6 +1164,8 @@ Analyze Dark Triad traits. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'framework',
+        'darkTriad',
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -1049,11 +1182,15 @@ Analyze Dark Triad traits. Return JSON:
     message: string,
     history: any[],
     selectedLLM: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<any> {
     try {
       const sys = this.getKBPrompt('CRT_Complete_Analysis.txt');
-      const response = await this.llmOrchestrator.generateResponse(
-        selectedLLM, // Consistent with other analysis LLMs
+      const { response } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
+        selectedLLM,
         [
           {
             role: 'system',
@@ -1078,6 +1215,8 @@ Analyze cognitive/thinking style. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 1000 },
+        'framework',
+        'crt',
       );
 
       return this.parseJsonSafe(response.content, { insights: [] });
@@ -1088,16 +1227,20 @@ Analyze cognitive/thinking style. Return JSON:
   }
 
   // New analyzers using KB system prompts (Attachment, Enneagram, MBTI, Erikson, Gestalt)
-  private async callLLMWithAttachmentKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithAttachmentKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('AttachmentStyleClassifier.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
           { role: 'user', content: message },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'attachment',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1111,16 +1254,20 @@ Analyze cognitive/thinking style. Return JSON:
     }
   }
 
-  private async callLLMWithEnneagramKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithEnneagramKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('Enneagram.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
           { role: 'user', content: message },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'enneagram',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1134,10 +1281,12 @@ Analyze cognitive/thinking style. Return JSON:
     }
   }
 
-  private async callLLMWithMBTIKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithMBTIKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('MBTI.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
@@ -1147,6 +1296,8 @@ Analyze cognitive/thinking style. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'mbti',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1160,16 +1311,20 @@ Analyze cognitive/thinking style. Return JSON:
     }
   }
 
-  private async callLLMWithEriksonKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithEriksonKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('EPSI_CompleteAnalysis.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
           { role: 'user', content: message },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'erikson',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1183,16 +1338,20 @@ Analyze cognitive/thinking style. Return JSON:
     }
   }
 
-  private async callLLMWithGestaltKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithGestaltKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('GestaltAwareness.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
           { role: 'user', content: message },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'gestalt',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {
@@ -1206,10 +1365,12 @@ Analyze cognitive/thinking style. Return JSON:
     }
   }
 
-  private async callLLMWithBioPsychKB(message: string, selectedLLM: string): Promise<any> {
+  private async callLLMWithBioPsychKB(message: string, selectedLLM: string, sessionId: string, userId?: string): Promise<any> {
     try {
       const sys = this.getKBPrompt('Bio-PsychReasoner.txt');
-      const res = await this.llmOrchestrator.generateResponse(
+      const { response: res } = await this.callLLMWithTokenTracking(
+        userId,
+        sessionId,
         selectedLLM,
         [
           { role: 'system', content: sys },
@@ -1219,6 +1380,8 @@ Analyze cognitive/thinking style. Return JSON:
           },
         ],
         { temperature: 0.0, max_tokens: 800 },
+        'framework',
+        'bioPsych',
       );
       const parsed = this.parseJsonSafe(res.content, null);
       if (!parsed || parsed.module_error) {

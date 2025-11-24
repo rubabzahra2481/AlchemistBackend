@@ -15,6 +15,9 @@ import { DeepSeekProvider } from './providers/deepseek.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { SupabaseAuthService } from './services/supabase-auth.service';
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
+import { CreditGuard } from './guards/credit.guard';
+import { CreditService } from './services/credit.service';
+import { SubscriptionService } from './services/subscription.service';
 import { DatabaseModule } from './database/database.module';
 import { ChatRepository } from './repositories/chat.repository';
 
@@ -41,6 +44,10 @@ import { ChatRepository } from './repositories/chat.repository';
     // Supabase Auth
     SupabaseAuthService,
     SupabaseAuthGuard,
+    // Credit System
+    CreditService,
+    SubscriptionService,
+    CreditGuard,
     // Database
     ChatRepository, // ✅ Add repository
   ],
