@@ -9,7 +9,7 @@ import { getAvailableLLMs, DEFAULT_LLM } from '../config/llm-models.config';
 import { CreditService } from '../services/credit.service';
 
 // Default anonymous user ID for non-authenticated usage
-const ANONYMOUS_USER_ID = 'anonymous-user';
+const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 @ApiTags('chat')
 @Controller('chat')

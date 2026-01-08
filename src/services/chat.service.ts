@@ -43,7 +43,7 @@ export class ChatService {
     message: string,
     sessionId: string,
     selectedLLM: string = 'gpt-4o',
-    userId: string = 'anonymous-user', // Default to anonymous user
+    userId: string = '00000000-0000-0000-0000-000000000000', // Default anonymous UUID
   ): Promise<ChatResponseDto> {
     try {
 
@@ -948,7 +948,7 @@ export class ChatService {
   /**
    * Gets conversation history for a session
    */
-  async getSessionHistory(sessionId: string, userId: string = 'anonymous-user'): Promise<any[]> {
+  async getSessionHistory(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000'): Promise<any[]> {
     // ✅ Get messages from database
     const messages = await this.chatRepository.getSessionMessages(sessionId, userId);
     return messages.map((m) => ({
@@ -965,7 +965,7 @@ export class ChatService {
   /**
    * Clears a session
    */
-  async clearSession(sessionId: string, userId: string = 'anonymous-user'): Promise<void> {
+  async clearSession(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000'): Promise<void> {
     // ✅ Delete session from database (cascade delete will remove all messages)
     await this.chatRepository.deleteSession(sessionId, userId);
     
@@ -1000,7 +1000,7 @@ export class ChatService {
   /**
    * Get all sessions for a user
    */
-  async getAllSessions(userId: string = 'anonymous-user') {
+  async getAllSessions(userId: string = '00000000-0000-0000-0000-000000000000') {
     // ✅ Get sessions from database
     const sessions = await this.chatRepository.getUserSessions(userId);
     // Get last message for each session to show in sidebar
