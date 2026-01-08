@@ -37,18 +37,15 @@ export class ChatService {
   /**
    * Main method to process user messages
    * Uses parallel LLM approach with Smart Incremental analysis (Option 2)
-   * @param userId - Unique user ID from Supabase (UUID like "19960af9-a256-4596-aacf-ccb4d54b65d2")
+   * @param userId - User ID (can be anonymous for non-authenticated usage)
    */
   async processMessage(
     message: string,
     sessionId: string,
     selectedLLM: string = 'gpt-4o',
-    userId?: string, // User ID from Supabase auth
+    userId: string = 'anonymous-user', // Default to anonymous user
   ): Promise<ChatResponseDto> {
     try {
-      if (!userId) {
-        throw new Error('User ID is required for chat storage');
-      }
 
       // ✅ Get or create session in database
       const session = await this.chatRepository.getOrCreateSession(
@@ -950,13 +947,8 @@ export class ChatService {
 
   /**
    * Gets conversation history for a session
-   * @param userId - Ensure user can only access their own sessions
    */
-  async getSessionHistory(sessionId: string, userId?: string): Promise<any[]> {
-    if (!userId) {
-      return [];
-    }
-
+  async getSessionHistory(sessionId: string, userId: string = 'anonymous-user'): Promise<any[]> {
     // ✅ Get messages from database
     const messages = await this.chatRepository.getSessionMessages(sessionId, userId);
     return messages.map((m) => ({
@@ -972,13 +964,8 @@ export class ChatService {
 
   /**
    * Clears a session
-   * @param userId - Ensure user can only delete their own sessions
    */
-  async clearSession(sessionId: string, userId?: string): Promise<void> {
-    if (!userId) {
-      return;
-    }
-
+  async clearSession(sessionId: string, userId: string = 'anonymous-user'): Promise<void> {
     // ✅ Delete session from database (cascade delete will remove all messages)
     await this.chatRepository.deleteSession(sessionId, userId);
     
@@ -1012,13 +999,8 @@ export class ChatService {
 
   /**
    * Get all sessions for a user
-   * @param userId - Unique user ID from Supabase
    */
-  async getAllSessions(userId: string) {
-    if (!userId) {
-      return [];
-    }
-
+  async getAllSessions(userId: string = 'anonymous-user') {
     // ✅ Get sessions from database
     const sessions = await this.chatRepository.getUserSessions(userId);
     // Get last message for each session to show in sidebar

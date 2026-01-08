@@ -13,9 +13,6 @@ import { OpenAIProvider } from './providers/openai.provider';
 import { ClaudeProvider } from './providers/claude.provider';
 import { DeepSeekProvider } from './providers/deepseek.provider';
 import { GeminiProvider } from './providers/gemini.provider';
-import { SupabaseAuthService } from './services/supabase-auth.service';
-import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
-import { CreditGuard } from './guards/credit.guard';
 import { CreditService } from './services/credit.service';
 import { SubscriptionService } from './services/subscription.service';
 import { DatabaseModule } from './database/database.module';
@@ -41,13 +38,9 @@ import { ChatRepository } from './repositories/chat.repository';
     DeepSeekProvider,
     GeminiProvider,
     LLMOrchestratorService,
-    // Supabase Auth
-    SupabaseAuthService,
-    SupabaseAuthGuard,
-    // Credit System
+    // Credit System (no auth required)
     CreditService,
     SubscriptionService,
-    CreditGuard,
     // Database
     ChatRepository, // ✅ Add repository
   ],

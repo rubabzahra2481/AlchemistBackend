@@ -1,20 +1,19 @@
 import { Controller, Post, Body, Get, Param, Delete, Patch, Res, UseGuards, Query, HttpException, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
 import { ChatService } from '../services/chat.service';
 import { RateLimitGuard } from '../guards/rate-limit.guard';
-import { SupabaseAuthGuard } from '../guards/supabase-auth.guard';
-import { CreditGuard } from '../guards/credit.guard';
-import { UserId } from '../decorators/user.decorator';
 import { v4 as uuidv4 } from 'uuid';
 import { getAvailableLLMs, DEFAULT_LLM } from '../config/llm-models.config';
 import { CreditService } from '../services/credit.service';
 
+// Default anonymous user ID for non-authenticated usage
+const ANONYMOUS_USER_ID = 'anonymous-user';
+
 @ApiTags('chat')
 @Controller('chat')
-@UseGuards(RateLimitGuard, SupabaseAuthGuard, CreditGuard) // Add CreditGuard to check credits
-@ApiBearerAuth() // Indicates that this endpoint requires authentication
+@UseGuards(RateLimitGuard) // Only rate limiting, no auth
 export class ChatController {
   constructor(
     private readonly chatService: ChatService,
@@ -24,41 +23,35 @@ export class ChatController {
   @Post()
   @ApiOperation({ summary: 'Send a message and get personalized advice' })
   @ApiResponse({ status: 200, description: 'Returns advice and personality analysis' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
   async chat(
     @Body() chatRequest: ChatRequestDto,
-    @UserId() userId: string, // Get user ID from validated token
   ): Promise<ChatResponseDto> {
     const sessionId = chatRequest.sessionId || uuidv4();
     const selectedLLM = chatRequest.selectedLLM || DEFAULT_LLM;
-    // Pass userId to processMessage - this will be stored with chat history
+    // Use anonymous user ID for non-authenticated usage
     return await this.chatService.processMessage(
       chatRequest.message,
       sessionId,
       selectedLLM,
-      userId,
+      ANONYMOUS_USER_ID,
     );
   }
 
   @Get('session/:sessionId/history')
   @ApiOperation({ summary: 'Get conversation history for a session' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
   async getHistory(
     @Param('sessionId') sessionId: string,
-    @UserId() userId: string, // Ensure user can only access their own sessions
   ) {
-    return await this.chatService.getSessionHistory(sessionId, userId);
+    return await this.chatService.getSessionHistory(sessionId, ANONYMOUS_USER_ID);
   }
 
   @Delete('session/:sessionId')
   @ApiOperation({ summary: 'Delete a chat session and all its messages' })
   @ApiResponse({ status: 200, description: 'Session deleted successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
   async deleteSession(
     @Param('sessionId') sessionId: string,
-    @UserId() userId: string, // Ensure user can only delete their own sessions
   ) {
-    await this.chatService.clearSession(sessionId, userId);
+    await this.chatService.clearSession(sessionId, ANONYMOUS_USER_ID);
     return { message: 'Session deleted successfully' };
   }
 
@@ -66,12 +59,10 @@ export class ChatController {
   @ApiOperation({ summary: 'Rename a chat session' })
   @ApiResponse({ status: 200, description: 'Session renamed successfully' })
   @ApiResponse({ status: 400, description: 'Bad request - Invalid title' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
   @ApiResponse({ status: 404, description: 'Session not found' })
   async renameSession(
     @Param('sessionId') sessionId: string,
     @Body() body: { title: string },
-    @UserId() userId: string, // Ensure user can only rename their own sessions
   ) {
     try {
       // Validate input
@@ -88,8 +79,8 @@ export class ChatController {
         throw new HttpException('Title must be 255 characters or less', HttpStatus.BAD_REQUEST);
       }
       
-      // Rename session (service will check ownership and existence)
-      await this.chatService.renameSession(sessionId, userId, trimmedTitle);
+      // Rename session
+      await this.chatService.renameSession(sessionId, ANONYMOUS_USER_ID, trimmedTitle);
       return { message: 'Session renamed successfully' };
     } catch (error: any) {
       // Re-throw HttpException as-is
@@ -115,12 +106,11 @@ export class ChatController {
   }
 
   @Get('sessions')
-  @ApiOperation({ summary: 'Get all chat sessions for the authenticated user' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
-  async getAllSessions(@UserId() userId: string) {
-    console.log('📥 [ChatController] GET /chat/sessions called for userId:', userId);
+  @ApiOperation({ summary: 'Get all chat sessions' })
+  async getAllSessions() {
+    console.log('📥 [ChatController] GET /chat/sessions called');
     try {
-      const sessions = await this.chatService.getAllSessions(userId);
+      const sessions = await this.chatService.getAllSessions(ANONYMOUS_USER_ID);
       console.log('✅ [ChatController] Returning sessions:', sessions?.length || 0);
       return sessions;
     } catch (error) {
@@ -152,12 +142,11 @@ export class ChatController {
   }
 
   @Get('credits')
-  @ApiOperation({ summary: 'Get credit usage statistics for the authenticated user' })
+  @ApiOperation({ summary: 'Get credit usage statistics' })
   @ApiResponse({ status: 200, description: 'Returns credit usage statistics' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid or missing token' })
-  async getCredits(@UserId() userId: string) {
-    const stats = await this.creditService.getUsageStats(userId);
-    const creditCheck = await this.creditService.checkCredits(userId);
+  async getCredits() {
+    const stats = await this.creditService.getUsageStats(ANONYMOUS_USER_ID);
+    const creditCheck = await this.creditService.checkCredits(ANONYMOUS_USER_ID);
     
     return {
       ...stats,

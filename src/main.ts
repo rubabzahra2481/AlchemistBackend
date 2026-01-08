@@ -15,20 +15,12 @@ async function bootstrap() {
     console.log('🚀 [Bootstrap] Starting application...');
     console.log('📋 [Bootstrap] Environment variables check:');
     console.log('   - DATABASE_URL:', process.env.DATABASE_URL ? '✅ Set' : '❌ Missing');
-    console.log('   - SUPABASE_URL:', process.env.SUPABASE_URL ? '✅ Set' : '❌ Missing');
-    console.log('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing');
     console.log('   - OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? '✅ Set' : '❌ Missing');
     console.log('   - PORT:', process.env.PORT || '3000 (default)');
     
     // Validate critical environment variables
     if (!process.env.DATABASE_URL) {
       throw new Error('DATABASE_URL is required but not set');
-    }
-    if (!process.env.SUPABASE_URL) {
-      throw new Error('SUPABASE_URL is required but not set');
-    }
-    if (!process.env.SUPABASE_ANON_KEY) {
-      throw new Error('SUPABASE_ANON_KEY is required but not set');
     }
     
     console.log('📦 [Bootstrap] Creating NestJS application...');
@@ -154,8 +146,6 @@ async function bootstrap() {
     console.error('   - ARCH:', process.arch);
     console.error('   - NODE_ENV:', process.env.NODE_ENV || 'not set');
     console.error('   - DATABASE_URL:', process.env.DATABASE_URL ? 'Set (length: ' + process.env.DATABASE_URL.length + ')' : 'Missing');
-    console.error('   - SUPABASE_URL:', process.env.SUPABASE_URL || 'Missing');
-    console.error('   - SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'Set' : 'Missing');
     
     // Check if error is related to database
     if (error?.message?.includes('DATABASE') || error?.message?.includes('database') || error?.message?.includes('connection')) {
@@ -164,13 +154,6 @@ async function bootstrap() {
       console.error('   2. VPC connectivity (if using VPC)');
       console.error('   3. Security group rules (port 5432)');
       console.error('   4. Database endpoint is correct');
-    }
-    
-    // Check if error is related to Supabase
-    if (error?.message?.includes('SUPABASE') || error?.message?.includes('Supabase')) {
-      console.error('\n💡 [Bootstrap] Supabase-related error detected. Check:');
-      console.error('   1. SUPABASE_URL is correct');
-      console.error('   2. SUPABASE_ANON_KEY is valid');
     }
     
     process.exit(1);
