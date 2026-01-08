@@ -3,9 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ChatSession } from '../entities/chat-session.entity';
 import { ChatMessage } from '../entities/chat-message.entity';
-import { UserSubscription } from '../entities/user-subscription.entity';
-import { TokenUsageLog } from '../entities/token-usage-log.entity';
-import { PremiumReplyUsage } from '../entities/premium-reply-usage.entity';
+// Note: UserSubscription, TokenUsageLog, PremiumReplyUsage tables don't exist yet
+// Credit/subscription system is mocked - no database tables needed
 
 @Module({
   imports: [
@@ -38,7 +37,7 @@ import { PremiumReplyUsage } from '../entities/premium-reply-usage.entity';
             username: url.username,
             password: url.password,
             database: databaseName,
-            entities: [ChatSession, ChatMessage, UserSubscription, TokenUsageLog, PremiumReplyUsage],
+            entities: [ChatSession, ChatMessage],
             synchronize: false, // ✅ NEVER use synchronize in production - use migrations instead
             ssl: {
               rejectUnauthorized: false, // For Aurora Postgres RDS
@@ -86,7 +85,7 @@ import { PremiumReplyUsage } from '../entities/premium-reply-usage.entity';
       inject: [ConfigService],
     }),
     // Register repositories for dependency injection
-    TypeOrmModule.forFeature([ChatSession, ChatMessage, UserSubscription, TokenUsageLog, PremiumReplyUsage]),
+    TypeOrmModule.forFeature([ChatSession, ChatMessage]),
   ],
   exports: [TypeOrmModule],
 })
