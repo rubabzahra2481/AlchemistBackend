@@ -139,8 +139,7 @@ export class AdviceGeneratorService {
         }
       }
 
-      // Clean up any remaining markdown or formatting
-      cleanResponse = cleanResponse.replace(/^\*{2}\s*/, '').replace(/\s*\*{2}$/, '');
+      // Note: Don't strip ** markdown as frontend renders it as bold
 
       // Log for debugging
       const fs = require('fs');
