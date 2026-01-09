@@ -1,119 +1,38 @@
 -- ============================================================================
--- AI ALCHEMIST - DATABASE SCHEMA
+-- AI ALCHEMIST AGENT - DATABASE SCHEMA
 -- ============================================================================
--- This schema supports the psychological analysis chat system.
--- Designed for PostgreSQL with future authentication/subscription support.
--- ============================================================================
-
--- ============================================================================
--- SECTION 1: USER & AUTHENTICATION (For Future Implementation)
+-- Tables for the psychological analysis chat agent.
+-- Requires: users table (managed by main team)
 -- ============================================================================
 
--- Users table - core user identity
--- Currently uses anonymous UUID: '00000000-0000-0000-0000-000000000000'
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE,
-    email_verified BOOLEAN DEFAULT FALSE,
-    
-    -- Profile info
-    display_name VARCHAR(100),
-    avatar_url TEXT,
-    
-    -- Auth provider info (for OAuth)
-    auth_provider VARCHAR(50), -- 'email', 'google', 'apple', 'github'
-    auth_provider_id VARCHAR(255),
-    
-    -- Account status
-    is_active BOOLEAN DEFAULT TRUE,
-    is_banned BOOLEAN DEFAULT FALSE,
-    ban_reason TEXT,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Indexes
-    CONSTRAINT users_auth_provider_unique UNIQUE (auth_provider, auth_provider_id)
-);
+-- ============================================================================
+-- FOREIGN KEY DEPENDENCIES (from main database)
+-- ============================================================================
+/*
+REQUIRED FROM MAIN DB:
+  - users.id (UUID) - Primary key of the users table
+  
+FOREIGN KEYS WE NEED:
+  - chat_sessions.user_id → users.id
+  - chat_messages.user_id → users.id
+  - user_psychological_profiles.user_id → users.id
+  - framework_analysis_logs.user_id → users.id
+  - token_usage_logs.user_id → users.id
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_created_at ON users(created_at);
+If users table doesn't exist yet, use this placeholder:
+  CREATE TABLE users (id UUID PRIMARY KEY DEFAULT gen_random_uuid());
+*/
 
 -- ============================================================================
--- SECTION 2: SUBSCRIPTION & TIERS
+-- TABLE 1: CHAT SESSIONS
 -- ============================================================================
+-- Stores conversation sessions between users and the AI agent
 
--- Subscription tiers enum
-CREATE TYPE subscription_tier AS ENUM ('FREE', 'STARTER', 'PRO', 'BUSINESS', 'ENTERPRISE');
-
--- User subscriptions
-CREATE TABLE user_subscriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Subscription details
-    tier subscription_tier DEFAULT 'FREE',
-    
-    -- Billing cycle
-    billing_cycle_start TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    billing_cycle_end TIMESTAMP WITH TIME ZONE,
-    
-    -- Usage tracking (resets each billing cycle)
-    tokens_used INTEGER DEFAULT 0,
-    premium_replies_used INTEGER DEFAULT 0,
-    
-    -- Payment info (Stripe integration)
-    stripe_customer_id VARCHAR(255),
-    stripe_subscription_id VARCHAR(255),
-    
-    -- Status
-    is_active BOOLEAN DEFAULT TRUE,
-    cancelled_at TIMESTAMP WITH TIME ZONE,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT user_subscriptions_user_unique UNIQUE (user_id)
-);
-
-CREATE INDEX idx_user_subscriptions_user_id ON user_subscriptions(user_id);
-CREATE INDEX idx_user_subscriptions_tier ON user_subscriptions(tier);
-CREATE INDEX idx_user_subscriptions_billing_end ON user_subscriptions(billing_cycle_end);
-
--- Subscription tier configuration (reference table)
-CREATE TABLE subscription_tier_config (
-    tier subscription_tier PRIMARY KEY,
-    price_monthly DECIMAL(10,2) NOT NULL,
-    tokens_included INTEGER NOT NULL,
-    framework_cap INTEGER NOT NULL,
-    premium_replies_included INTEGER DEFAULT 0, -- -1 = unlimited
-    overage_cost_per_1k DECIMAL(10,4),
-    premium_reply_cost DECIMAL(10,2),
-    default_model VARCHAR(50) NOT NULL,
-    allows_premium_by_default BOOLEAN DEFAULT FALSE,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Insert default tier configurations
-INSERT INTO subscription_tier_config (tier, price_monthly, tokens_included, framework_cap, premium_replies_included, overage_cost_per_1k, premium_reply_cost, default_model, allows_premium_by_default, description) VALUES
-('FREE', 0, 100000, 11, 0, 0.01, 0, 'gpt-4o', FALSE, 'Free tier with basic access'),
-('STARTER', 4, 400000, 11, 0, 0.012, 0.50, 'gpt-4o', FALSE, 'Starter tier for casual users'),
-('PRO', 15, 1500000, 11, 10, 0.009, 0.30, 'gpt-4o', FALSE, 'Pro tier for regular users'),
-('BUSINESS', 59, 6000000, 11, -1, 0.006, 0, 'gpt-4o', TRUE, 'Business tier with premium features'),
-('ENTERPRISE', 199, 20000000, 11, -1, 0.004, 0, 'gpt-4o', TRUE, 'Enterprise tier with unlimited premium');
-
--- ============================================================================
--- SECTION 3: CHAT SESSIONS & MESSAGES
--- ============================================================================
-
--- Chat sessions
 CREATE TABLE chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- FK to main users table
+    user_id UUID NOT NULL, -- FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE
     
     -- Session info
     title VARCHAR(255),
@@ -126,8 +45,18 @@ CREATE TABLE chat_sessions (
     -- Stats
     message_count INTEGER DEFAULT 0,
     
-    -- Current psychological profile (JSON snapshot)
+    -- Current psychological profile (JSON snapshot of latest analysis)
     current_profile JSONB,
+    /*
+    current_profile structure:
+    {
+      "bigFive": { "openness": "high", "conscientiousness": "medium", ... },
+      "dass": { "depression": "mild", "anxiety": "normal", "stress": "moderate", ... },
+      "rse": { "level": "medium", "indicators": [...] },
+      "safety": { "flag": "none" },
+      "summaryForThisMessage": { "summary": "...", "key_signals": [...] }
+    }
+    */
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -135,166 +64,295 @@ CREATE TABLE chat_sessions (
     last_activity TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Indexes
 CREATE INDEX idx_chat_sessions_user_id ON chat_sessions(user_id);
 CREATE INDEX idx_chat_sessions_last_activity ON chat_sessions(last_activity DESC);
-CREATE INDEX idx_chat_sessions_created_at ON chat_sessions(created_at DESC);
-CREATE INDEX idx_chat_sessions_user_active ON chat_sessions(user_id, is_active);
+CREATE INDEX idx_chat_sessions_user_active ON chat_sessions(user_id, is_active) WHERE is_active = TRUE;
 
--- Chat messages
+-- ============================================================================
+-- TABLE 2: CHAT MESSAGES
+-- ============================================================================
+-- Stores individual messages in each chat session
+
 CREATE TABLE chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- FK to chat_sessions
     session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- FK to main users table
+    user_id UUID NOT NULL, -- FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE
     
     -- Message content
-    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
     content TEXT NOT NULL,
     
-    -- Ordering
+    -- Ordering within session
     sequence_number INTEGER NOT NULL,
     
-    -- Assistant message metadata (null for user messages)
+    -- Assistant message metadata (NULL for user messages)
     selected_llm VARCHAR(50),
-    reasoning TEXT, -- Internal reasoning/chain-of-thought
+    reasoning TEXT, -- Internal chain-of-thought reasoning
     
-    -- Analysis results (JSON)
+    -- Analysis results (JSON) - populated for assistant messages
     analysis JSONB,
-    recommendations JSONB,
-    profile_snapshot JSONB, -- Psychological profile at this point
+    /*
+    analysis structure:
+    {
+      "overallInsights": "User shows signs of...",
+      "dominantQuotients": ["EQ", "SQ"],
+      "needsAttention": ["stress management"],
+      "conversationContext": "..."
+    }
+    */
     
-    -- Frameworks that were triggered for this message
-    frameworks_triggered TEXT[], -- Array of framework names
+    recommendations JSONB, -- ["Take breaks", "Practice mindfulness"]
+    
+    profile_snapshot JSONB, -- Full psychological profile at this point in conversation
+    
+    -- Which frameworks were triggered for this message
+    frameworks_triggered TEXT[], -- ['bigFive', 'dass', 'rse', 'crt']
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Indexes
 CREATE INDEX idx_chat_messages_session_id ON chat_messages(session_id);
 CREATE INDEX idx_chat_messages_user_id ON chat_messages(user_id);
 CREATE INDEX idx_chat_messages_session_sequence ON chat_messages(session_id, sequence_number);
-CREATE INDEX idx_chat_messages_created_at ON chat_messages(created_at DESC);
 
 -- ============================================================================
--- SECTION 4: PSYCHOLOGICAL PROFILES (Accumulated Over Sessions)
+-- TABLE 3: USER PSYCHOLOGICAL PROFILES
 -- ============================================================================
+-- Accumulated psychological profile per user (built over all conversations)
 
--- Master psychological profile per user (accumulated over all sessions)
 CREATE TABLE user_psychological_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
-    -- Big Five personality traits (accumulated averages)
+    -- FK to main users table (one profile per user)
+    user_id UUID NOT NULL UNIQUE, -- FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE
+    
+    -- ========== 11 PSYCHOLOGICAL FRAMEWORKS ==========
+    
+    -- 1. Big Five Personality Traits
     big_five JSONB,
-    -- Structure: { openness, conscientiousness, extraversion, agreeableness, neuroticism, confidence, last_updated }
+    /*
+    {
+      "openness": "high/medium/low",
+      "conscientiousness": "high/medium/low",
+      "extraversion": "high/medium/low",
+      "agreeableness": "high/medium/low",
+      "neuroticism": "high/medium/low",
+      "insights": ["Creative thinker", "Prefers routine"],
+      "confidence": 0.85,
+      "evidence": ["I love trying new things"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- DASS-42 emotional state (most recent)
+    -- 2. DASS-42 (Depression, Anxiety, Stress)
     dass JSONB,
-    -- Structure: { depression, anxiety, stress, concerns, confidence, last_updated }
+    /*
+    {
+      "depression": "normal/mild/moderate/severe/extremely_severe",
+      "anxiety": "normal/mild/moderate/severe/extremely_severe",
+      "stress": "normal/mild/moderate/severe/extremely_severe",
+      "concerns": ["Elevated stress levels"],
+      "requiresCrisisResponse": false,
+      "confidence": 0.78,
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Rosenberg Self-Esteem
+    -- 3. RSE (Rosenberg Self-Esteem)
     rse JSONB,
-    -- Structure: { level, indicators, confidence, last_updated }
+    /*
+    {
+      "level": "low/medium/high",
+      "indicators": ["Self-critical language", "Minimizes achievements"],
+      "confidence": 0.72,
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Dark Triad
+    -- 4. Dark Triad
     dark_triad JSONB,
-    -- Structure: { machiavellianism, narcissism, psychopathy, insights, confidence, last_updated }
+    /*
+    {
+      "machiavellianism": "high/medium/low/unknown",
+      "narcissism": "high/medium/low/unknown",
+      "psychopathy": "high/medium/low/unknown",
+      "insights": ["Shows empathy", "Values fairness"],
+      "confidence": 0.65,
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Cognitive Reflection Test
+    -- 5. CRT (Cognitive Reflection Test - Thinking Style)
     crt JSONB,
-    -- Structure: { thinkingStyle, systemPreference, insights, confidence, last_updated }
+    /*
+    {
+      "thinkingStyle": "intuitive/balanced/analytical/unknown",
+      "systemPreference": "system1/mixed/system2/unknown",
+      "insights": ["Tends to overthink", "Trusts gut feelings"],
+      "confidence": 0.70,
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Attachment Style
+    -- 6. Attachment Style
     attachment JSONB,
-    -- Structure: { style, confidence, evidence, last_updated }
+    /*
+    {
+      "style": "secure/anxious/avoidant/disorganized/unknown",
+      "confidence": 0.68,
+      "evidence": ["Fear of abandonment mentioned"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Enneagram
+    -- 7. Enneagram
     enneagram JSONB,
-    -- Structure: { primary_type, wing, confidence, evidence, last_updated }
+    /*
+    {
+      "primary_type": 1-9,
+      "wing": 1-9 or null,
+      "confidence": 0.60,
+      "evidence": ["Perfectionist tendencies"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- MBTI
+    -- 8. MBTI
     mbti JSONB,
-    -- Structure: { EI, SN, TF, JP, confidence, evidence, last_updated }
+    /*
+    {
+      "EI": "E/I/unknown",
+      "SN": "S/N/unknown",
+      "TF": "T/F/unknown",
+      "JP": "J/P/unknown",
+      "confidence": { "EI": 0.8, "SN": 0.5, "TF": 0.6, "JP": 0.7 },
+      "evidence": ["Prefers alone time to recharge"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Erikson Psychosocial Stage
+    -- 9. Erikson Psychosocial Stage
     erikson JSONB,
-    -- Structure: { stage, resolution, confidence, evidence, last_updated }
+    /*
+    {
+      "stage": "S5_Identity/S6_Intimacy/S7_Generativity/S8_Integrity",
+      "resolution": "positive/negative/in_progress",
+      "confidence": 0.55,
+      "evidence": ["Questioning life purpose"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Gestalt Awareness
+    -- 10. Gestalt Awareness
     gestalt JSONB,
-    -- Structure: { awareness_level, contact_patterns, confidence, evidence, last_updated }
+    /*
+    {
+      "awareness_level": "high/medium/low",
+      "contact_patterns": ["deflection", "projection", "retroflection"],
+      "confidence": 0.62,
+      "evidence": ["Avoids discussing emotions directly"],
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Bio-Psycho-Social factors
+    -- 11. Bio-Psycho-Social Factors
     bio_psych JSONB,
-    -- Structure: { factors, confidence, evidence, last_updated }
+    /*
+    {
+      "possible_factors": ["Sleep", "Stress", "Social_Isolation"],
+      "confidence_by_factor": { "Sleep": 0.8, "Stress": 0.7 },
+      "evidence": ["Haven't slept well in weeks"],
+      "notes": "Physical health may be impacting mood",
+      "last_updated": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Integration metadata
+    -- ========== INTEGRATION & SAFETY ==========
+    
+    -- Cross-framework integration metadata
     integration_meta JSONB,
-    -- Structure: { similarities, conflicts, mild_cases, last_integration }
+    /*
+    {
+      "similarities": [{ "models": ["Big5", "DASS"], "agreement": "High anxiety confirmed" }],
+      "conflicts": [{ "conflict": "Neuroticism vs Anxiety", "resolution": "..." }],
+      "mild_cases": [{ "trait": "Extraversion", "interpretation": "Ambivert" }],
+      "last_integration": "2024-01-15T10:30:00Z"
+    }
+    */
     
-    -- Safety flags history
+    -- Safety flags history (crisis/risk indicators)
     safety_flags JSONB,
-    -- Structure: [{ flag, category, timestamp, message_id }]
+    /*
+    [
+      { "flag": "risk", "category": "self_harm", "timestamp": "...", "message_id": "..." },
+      { "flag": "none", "timestamp": "..." }
+    ]
+    */
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT user_profiles_user_unique UNIQUE (user_id)
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Indexes
 CREATE INDEX idx_user_profiles_user_id ON user_psychological_profiles(user_id);
 
 -- ============================================================================
--- SECTION 5: FRAMEWORK ANALYSIS LOGS (Detailed Per-Message Analysis)
+-- TABLE 4: FRAMEWORK ANALYSIS LOGS
 -- ============================================================================
+-- Detailed log of each framework LLM call (for debugging/analytics)
 
--- Detailed log of each framework analysis
 CREATE TABLE framework_analysis_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- FKs
     message_id UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
     session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL, -- FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE
     
-    -- Framework info
+    -- Which framework was run
     framework_name VARCHAR(50) NOT NULL,
-    -- Values: 'bigFive', 'dass', 'rse', 'darkTriad', 'crt', 'attachment', 'enneagram', 'mbti', 'erikson', 'gestalt', 'bioPsych'
+    -- Values: 'bigFive', 'dass', 'rse', 'darkTriad', 'crt', 
+    --         'attachment', 'enneagram', 'mbti', 'erikson', 'gestalt', 'bioPsych'
     
-    -- Analysis result (full JSON from LLM)
+    -- Full LLM response (JSON)
     result JSONB NOT NULL,
     
-    -- Confidence score (extracted for easy querying)
-    confidence DECIMAL(3,2),
+    -- Extracted for easy querying
+    confidence DECIMAL(3,2), -- 0.00 to 1.00
+    evidence TEXT[], -- Array of quote strings
     
-    -- Evidence quotes (extracted for easy querying)
-    evidence TEXT[],
-    
-    -- LLM used for this analysis
+    -- LLM info
     llm_model VARCHAR(50),
-    
-    -- Token usage for this specific call
     tokens_used INTEGER DEFAULT 0,
-    
-    -- Timing
     latency_ms INTEGER,
     
-    -- Timestamps
+    -- Timestamp
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Indexes
 CREATE INDEX idx_framework_logs_message_id ON framework_analysis_logs(message_id);
-CREATE INDEX idx_framework_logs_session_id ON framework_analysis_logs(session_id);
 CREATE INDEX idx_framework_logs_user_id ON framework_analysis_logs(user_id);
 CREATE INDEX idx_framework_logs_framework ON framework_analysis_logs(framework_name);
-CREATE INDEX idx_framework_logs_confidence ON framework_analysis_logs(confidence DESC);
 
 -- ============================================================================
--- SECTION 6: TOKEN USAGE & BILLING
+-- TABLE 5: TOKEN USAGE LOGS
 -- ============================================================================
+-- Tracks all LLM API calls for cost monitoring
 
--- Detailed token usage log
 CREATE TABLE token_usage_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- FKs
+    user_id UUID NOT NULL, -- FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE
     session_id UUID REFERENCES chat_sessions(id) ON DELETE SET NULL,
     
     -- Token counts
@@ -303,231 +361,63 @@ CREATE TABLE token_usage_logs (
     output_tokens INTEGER DEFAULT 0,
     
     -- What used the tokens
-    llm_model VARCHAR(50) NOT NULL,
+    llm_model VARCHAR(50) NOT NULL, -- 'gpt-4o', 'claude-3-5-sonnet', etc.
     call_type VARCHAR(50) NOT NULL, -- 'classification', 'framework', 'advice', 'summary'
-    framework_name VARCHAR(50), -- If call_type = 'framework'
+    framework_name VARCHAR(50), -- If call_type = 'framework', which one
     
-    -- Cost calculation
+    -- Cost (optional, for billing)
     cost_usd DECIMAL(10,6),
     
-    -- Timestamps
+    -- Timestamp
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Indexes
 CREATE INDEX idx_token_logs_user_id ON token_usage_logs(user_id);
 CREATE INDEX idx_token_logs_session_id ON token_usage_logs(session_id);
 CREATE INDEX idx_token_logs_created_at ON token_usage_logs(created_at DESC);
-CREATE INDEX idx_token_logs_user_date ON token_usage_logs(user_id, created_at);
-
--- Premium reply usage tracking
-CREATE TABLE premium_reply_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_id UUID REFERENCES chat_sessions(id) ON DELETE SET NULL,
-    message_id UUID REFERENCES chat_messages(id) ON DELETE SET NULL,
-    
-    -- Premium model used
-    llm_model VARCHAR(50) NOT NULL,
-    
-    -- Cost (if overage)
-    cost_usd DECIMAL(10,4) DEFAULT 0,
-    was_overage BOOLEAN DEFAULT FALSE,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX idx_premium_logs_user_id ON premium_reply_logs(user_id);
-CREATE INDEX idx_premium_logs_created_at ON premium_reply_logs(created_at DESC);
 
 -- ============================================================================
--- SECTION 7: KNOWLEDGE BASE MANAGEMENT
--- ============================================================================
-
--- KB prompts versioning (for A/B testing and rollback)
-CREATE TABLE kb_prompts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    framework_name VARCHAR(50) NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1,
-    
-    -- Prompt content
-    prompt_content TEXT NOT NULL,
-    
-    -- Status
-    is_active BOOLEAN DEFAULT FALSE,
-    
-    -- Performance metrics
-    avg_confidence DECIMAL(3,2),
-    total_uses INTEGER DEFAULT 0,
-    
-    -- Metadata
-    description TEXT,
-    created_by VARCHAR(100),
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    activated_at TIMESTAMP WITH TIME ZONE,
-    
-    CONSTRAINT kb_prompts_framework_version_unique UNIQUE (framework_name, version)
-);
-
-CREATE INDEX idx_kb_prompts_framework ON kb_prompts(framework_name);
-CREATE INDEX idx_kb_prompts_active ON kb_prompts(framework_name, is_active) WHERE is_active = TRUE;
-
--- ============================================================================
--- SECTION 8: SYSTEM CONFIGURATION & AUDIT
--- ============================================================================
-
--- System configuration key-value store
-CREATE TABLE system_config (
-    key VARCHAR(100) PRIMARY KEY,
-    value JSONB NOT NULL,
-    description TEXT,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_by VARCHAR(100)
-);
-
--- Audit log for important actions
-CREATE TABLE audit_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    
-    -- Action info
-    action VARCHAR(100) NOT NULL,
-    entity_type VARCHAR(50), -- 'user', 'session', 'subscription', etc.
-    entity_id UUID,
-    
-    -- Change details
-    old_value JSONB,
-    new_value JSONB,
-    
-    -- Context
-    ip_address INET,
-    user_agent TEXT,
-    
-    -- Timestamps
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_action ON audit_logs(action);
-CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
-
--- ============================================================================
--- SECTION 9: HELPER FUNCTIONS & TRIGGERS
--- ============================================================================
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Apply updated_at trigger to relevant tables
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_user_subscriptions_updated_at BEFORE UPDATE ON user_subscriptions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_chat_sessions_updated_at BEFORE UPDATE ON chat_sessions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON user_psychological_profiles
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Function to update session message count and last_activity
-CREATE OR REPLACE FUNCTION update_session_on_message()
-RETURNS TRIGGER AS $$
-BEGIN
-    UPDATE chat_sessions 
-    SET 
-        message_count = message_count + 1,
-        last_activity = NOW(),
-        updated_at = NOW()
-    WHERE id = NEW.session_id;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_session_on_new_message AFTER INSERT ON chat_messages
-    FOR EACH ROW EXECUTE FUNCTION update_session_on_message();
-
--- ============================================================================
--- SECTION 10: VIEWS FOR COMMON QUERIES
--- ============================================================================
-
--- User dashboard view
-CREATE VIEW user_dashboard AS
-SELECT 
-    u.id AS user_id,
-    u.email,
-    u.display_name,
-    us.tier,
-    us.tokens_used,
-    stc.tokens_included,
-    us.premium_replies_used,
-    stc.premium_replies_included,
-    (SELECT COUNT(*) FROM chat_sessions cs WHERE cs.user_id = u.id AND cs.is_active = TRUE) AS active_sessions,
-    (SELECT COUNT(*) FROM chat_messages cm WHERE cm.user_id = u.id) AS total_messages,
-    u.last_login_at,
-    u.created_at
-FROM users u
-LEFT JOIN user_subscriptions us ON u.id = us.user_id
-LEFT JOIN subscription_tier_config stc ON us.tier = stc.tier;
-
--- Session summary view
-CREATE VIEW session_summaries AS
-SELECT 
-    cs.id AS session_id,
-    cs.user_id,
-    cs.title,
-    cs.selected_llm,
-    cs.message_count,
-    cs.created_at,
-    cs.last_activity,
-    (SELECT content FROM chat_messages cm WHERE cm.session_id = cs.id ORDER BY sequence_number DESC LIMIT 1) AS last_message,
-    (SELECT jsonb_object_keys(cs.current_profile) FROM generate_series(1,1)) AS active_frameworks
-FROM chat_sessions cs
-WHERE cs.is_active = TRUE;
-
--- ============================================================================
--- NOTES FOR IMPLEMENTATION
+-- SUMMARY: TABLES & FOREIGN KEYS NEEDED
 -- ============================================================================
 /*
-CURRENT STATE (Auth Removed):
-- All users use anonymous UUID: '00000000-0000-0000-0000-000000000000'
-- No tier restrictions (all frameworks run)
-- No token tracking enforcement
+TABLES CREATED BY THIS SCHEMA:
+  1. chat_sessions
+  2. chat_messages
+  3. user_psychological_profiles
+  4. framework_analysis_logs
+  5. token_usage_logs
 
-WHEN ADDING AUTH BACK:
-1. Create users record on signup
-2. Create user_subscriptions record (default FREE tier)
-3. Update chat.service.ts to use real user_id from auth token
-4. Enable CreditGuard and RateLimitGuard
-5. Re-enable framework cap logic in parallel-llm.service.ts
+FOREIGN KEYS NEEDED FROM MAIN DB:
+  ┌─────────────────────────────────┬──────────────────────────────────┐
+  │ Our Table                       │ FK Needed                        │
+  ├─────────────────────────────────┼──────────────────────────────────┤
+  │ chat_sessions.user_id           │ → users(id) ON DELETE CASCADE    │
+  │ chat_messages.user_id           │ → users(id) ON DELETE CASCADE    │
+  │ user_psychological_profiles     │ → users(id) ON DELETE CASCADE    │
+  │   .user_id                      │                                  │
+  │ framework_analysis_logs.user_id │ → users(id) ON DELETE CASCADE    │
+  │ token_usage_logs.user_id        │ → users(id) ON DELETE CASCADE    │
+  └─────────────────────────────────┴──────────────────────────────────┘
 
-FOREIGN KEY RELATIONSHIPS:
-- users (1) -> user_subscriptions (1)
-- users (1) -> chat_sessions (many)
-- users (1) -> user_psychological_profiles (1)
-- chat_sessions (1) -> chat_messages (many)
-- chat_messages (1) -> framework_analysis_logs (many)
-- users (1) -> token_usage_logs (many)
-- users (1) -> premium_reply_logs (many)
-- users (1) -> audit_logs (many)
+TO ADD FOREIGN KEYS (after users table exists):
+  ALTER TABLE chat_sessions 
+    ADD CONSTRAINT fk_chat_sessions_user 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-INDEXES STRATEGY:
-- Primary lookups: user_id, session_id, message_id
-- Time-based queries: created_at, last_activity
-- Filtering: tier, is_active, framework_name
+  ALTER TABLE chat_messages 
+    ADD CONSTRAINT fk_chat_messages_user 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-JSONB COLUMNS:
-- Used for flexible schema (psychological profiles evolve)
-- Can add GIN indexes if needed for JSON queries:
-  CREATE INDEX idx_profiles_big_five ON user_psychological_profiles USING GIN (big_five);
+  ALTER TABLE user_psychological_profiles 
+    ADD CONSTRAINT fk_user_profiles_user 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+  ALTER TABLE framework_analysis_logs 
+    ADD CONSTRAINT fk_framework_logs_user 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+  ALTER TABLE token_usage_logs 
+    ADD CONSTRAINT fk_token_logs_user 
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 */
