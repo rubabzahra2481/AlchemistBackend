@@ -47,8 +47,8 @@ export class CreditService {
    * Check if user can use premium model (always allowed in no-auth mode)
    */
   async canUsePremiumModel(userId: string): Promise<{ allowed: boolean; cost?: number; message?: string }> {
-    return { allowed: true };
-  }
+      return { allowed: true };
+    }
 
   /**
    * Record token usage (no-op in no-auth mode)

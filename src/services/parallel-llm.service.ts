@@ -364,7 +364,7 @@ export class ParallelLLMService {
         return null; // Skip analysis for pure greeting as first message
       }
 
-      // SHORT-INPUT ROUTER: for very short inputs, run light set + keyword triggers
+      // SHORT-INPUT ROUTER: for very short inputs, run core frameworks + keyword triggers
       const tokenApprox = message.trim().split(/\s+/).filter(Boolean).length;
       let classification: any;
       if (tokenApprox < 25) {
@@ -372,10 +372,10 @@ export class ParallelLLMService {
         const keywordTriggers = this.detectExtraTheoryTriggers(message);
         classification = {
           hasCrisisIndicators: safety.flag === 'risk',
-          hasEmotionalContent: true, // light set includes DASS
+          hasEmotionalContent: true, // core set includes DASS
           hasSelfWorthContent: true, // include RSE
           hasDarkTriadIndicators: false,
-          hasPersonalityIndicators: false,
+          hasPersonalityIndicators: true, // ALWAYS include BigFive - personality context is always useful
           hasCognitiveIndicators: true, // include CRT
           urgency: safety.flag === 'risk' ? 'critical' : 'low',
           // Add keyword-triggered flags for short inputs

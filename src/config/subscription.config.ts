@@ -17,7 +17,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionTier, SubscriptionPlanConfig
     tier: SubscriptionTier.FREE,
     price: 0,
     tokensIncluded: 100000, // 100k tokens/month
-    frameworkCap: 1, // 1 framework per message
+    frameworkCap: 6, // 6 frameworks per message (increased for anonymous users)
     defaultModel: 'gpt-4o', // Mid model
     premiumRepliesIncluded: 0,
     premiumReplyCost: 0, // Not available on free tier
