@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
 import { CreditService } from './credit.service';
-import { SubscriptionService } from './subscription.service';
-import { selectFrameworksByPriority, SUBSCRIPTION_PLANS } from '../config/subscription.config';
 
 interface Classification {
   hasCrisisIndicators: boolean;
@@ -80,7 +78,6 @@ export class ParallelLLMService {
     private configService: ConfigService,
     private llmOrchestrator: LLMOrchestratorService,
     private creditService: CreditService,
-    private subscriptionService: SubscriptionService,
   ) {}
 
   // Load and cache KB system prompts (verbatim). If file contains a JSON object
@@ -411,19 +408,10 @@ export class ParallelLLMService {
         return this.sessionCache.get(sessionId) || null;
       }
 
-      // Get framework cap based on user subscription tier
-      let frameworkCap = 8; // Default max (hard cap)
-      if (userId) {
-        const subscription = await this.subscriptionService.getOrCreateSubscription(userId);
-        const plan = SUBSCRIPTION_PLANS[subscription.tier];
-        frameworkCap = plan.frameworkCap;
-        console.log(`🎯 [Framework] User ${userId} tier ${subscription.tier}: framework cap = ${frameworkCap}`);
-      }
-
-      // Build list of matched frameworks based on classification
+      // Build list of matched frameworks based on classification (NO TIER LIMITS - run all triggered)
       const matchedFrameworks: string[] = [];
 
-      // Personality frameworks (highest priority)
+      // Personality frameworks
       if (classification.hasPersonalityIndicators) {
         matchedFrameworks.push('bigFive');
       }
@@ -431,7 +419,7 @@ export class ParallelLLMService {
         matchedFrameworks.push('darkTriad');
       }
 
-      // Emotional frameworks (medium priority)
+      // Emotional frameworks
       if (classification.hasCrisisIndicators || classification.hasEmotionalContent) {
         matchedFrameworks.push('dass');
       }
@@ -439,12 +427,12 @@ export class ParallelLLMService {
         matchedFrameworks.push('rse');
       }
 
-      // Crisis/Cognitive frameworks (lower priority)
+      // Cognitive frameworks
       if (classification.hasCognitiveIndicators) {
         matchedFrameworks.push('crt');
       }
 
-      // Extra frameworks from keywords
+      // Extra frameworks from keywords + classification
       const extraFromKeywords = this.detectExtraTheoryTriggers(message);
       const extraCombined = {
         hasAttachment: !!(classification.hasAttachment || extraFromKeywords.hasAttachment),
@@ -462,16 +450,10 @@ export class ParallelLLMService {
       if (extraCombined.hasGestalt) matchedFrameworks.push('gestalt');
       if (extraCombined.hasBioPsych) matchedFrameworks.push('bioPsych');
 
-      // Apply priority and cap: personality > emotional > crisis
-      // Also enforce maximum 8 LLM calls total per message
-      const maxFrameworkCalls = Math.min(frameworkCap, 8); // Hard cap at 8
-      const selectedFrameworks = selectFrameworksByPriority(
-        matchedFrameworks,
-        maxFrameworkCalls,
-        classification.hasCrisisIndicators,
-      );
+      // Run ALL matched frameworks (no tier-based caps)
+      const selectedFrameworks = matchedFrameworks;
 
-      console.log(`🎯 [Framework] Matched: ${matchedFrameworks.length}, Selected: ${selectedFrameworks.length} (cap: ${maxFrameworkCalls}, hard max: 8)`);
+      console.log(`🎯 [Framework] Running ${selectedFrameworks.length} frameworks: ${selectedFrameworks.join(', ')}`);
 
       // Run selected analyses in parallel
       const analysisPromises: Promise<any>[] = [];
