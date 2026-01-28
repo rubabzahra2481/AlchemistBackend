@@ -1,6 +1,7 @@
 export const LLM_MODELS = {
   // OpenAI Models (using actual available models)
   'gpt-4o': { provider: 'openai', model: 'gpt-4o', maxTokens: 4000, temperature: 0.7 },
+  'gpt-4o-mini': { provider: 'openai', model: 'gpt-4o-mini', maxTokens: 4000, temperature: 0.0 }, // Fast, cheap, good for classification
   'gpt-4-turbo': { provider: 'openai', model: 'gpt-4-turbo', maxTokens: 4000, temperature: 0.7 },
   'gpt-3.5-turbo': {
     provider: 'openai',

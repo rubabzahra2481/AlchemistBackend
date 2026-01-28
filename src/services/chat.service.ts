@@ -6,10 +6,13 @@ import { ParallelLLMService } from './parallel-llm.service';
 import { LLMOrchestratorService } from './llm-orchestrator.service';
 import { CreditService } from './credit.service';
 import { SubscriptionService } from './subscription.service';
+import { IOSBackendService } from './ios-backend.service';
+import { EdnaProfileService } from './edna-profile.service';
 import { ChatResponseDto } from '../dto/chat.dto';
 import { getAllQuotients, getQuotientById } from '../knowledge-base/quotients.data';
-import { ChatRepository } from '../repositories/chat.repository';
+import { ChatRepositoryAdapter } from '../repositories/chat-repository.adapter';
 import { isPremiumModel } from '../config/subscription.config';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ChatService {
@@ -23,6 +26,8 @@ export class ChatService {
     }
   >();
 
+  private readonly useIOSEDNA: boolean;
+
   constructor(
     private readonly personalityAnalyzer: PersonalityAnalyzerService,
     private readonly adviceGenerator: AdviceGeneratorService,
@@ -31,8 +36,16 @@ export class ChatService {
     private readonly llmOrchestrator: LLMOrchestratorService,
     private readonly creditService: CreditService,
     private readonly subscriptionService: SubscriptionService,
-    private readonly chatRepository: ChatRepository, // ✅ Add repository
-  ) {}
+    private readonly chatRepository: ChatRepositoryAdapter,
+    private readonly iosBackend: IOSBackendService, // 🔗 iOS backend for E-DNA
+    private readonly ednaProfileService: EdnaProfileService, // 🧬 E-DNA profile service
+    private readonly configService: ConfigService,
+  ) {
+    // USE_IOS_EDNA: Fetch E-DNA profiles from iOS backend for personalization
+    // USE_IOS_BACKEND: Use iOS backend for chat storage (requires all endpoints)
+    this.useIOSEDNA = this.configService.get<string>('USE_IOS_EDNA') === 'true';
+    console.log(`🧬 [ChatService] iOS E-DNA profile fetch: ${this.useIOSEDNA ? 'ENABLED' : 'DISABLED'}`);
+  }
 
   /**
    * Main method to process user messages
@@ -53,15 +66,18 @@ export class ChatService {
         userId,
         selectedLLM,
       );
+      
+      // Use the actual session ID from the database (may differ from input for iOS backend)
+      const actualSessionId = session.id || sessionId;
 
       // ✅ Load existing messages from database
-      const existingMessages = await this.chatRepository.getSessionMessages(sessionId, userId);
+      const existingMessages = await this.chatRepository.getSessionMessages(actualSessionId, userId);
       
       // ✅ Get next sequence number
       const nextSequenceNumber = existingMessages.length + 1;
 
       // ✅ Save user message to database
-      await this.chatRepository.saveUserMessage(sessionId, userId, message, nextSequenceNumber);
+      await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber);
 
       // ✅ Build history array for analysis (from existing messages + new message)
       // Ensure all timestamps are valid Date objects for ConversationMessage interface
@@ -94,7 +110,7 @@ export class ChatService {
       const psychProfile = await this.parallelLLM.analyze(
         message,
         historyBeforeCurrent,
-        sessionId,
+        actualSessionId,
         selectedLLM,
         userId, // Pass userId for credit checking and framework caps
       );
@@ -103,7 +119,7 @@ export class ChatService {
       const conversationInsights = this.conversationAnalyzer.analyzeConversation(history);
 
       // Build basic personality analysis (for compatibility)
-      const analysis = this.personalityAnalyzer.analyzePersonality(message, sessionId, history);
+      const analysis = this.personalityAnalyzer.analyzePersonality(message, actualSessionId, history);
 
       // Build enhanced insights from parallel LLM results + conversation patterns
       const enhancedInsights = this.buildEnhancedInsightsFromProfile(
@@ -113,7 +129,34 @@ export class ChatService {
       analysis.overallInsights = enhancedInsights;
 
       // Build a cleaned Profile object with confidence/evidence gating and safety/conflict
-      const cleanedProfile = this.buildCleanProfile(psychProfile);
+      let cleanedProfile = this.buildCleanProfile(psychProfile);
+
+      // 🔗 Fetch E-DNA profile from iOS backend if enabled (for personalization)
+      if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
+        try {
+          const ednaProfile = await this.iosBackend.getUserProfile(userId);
+          if (ednaProfile?.success && ednaProfile.ednaProfile) {
+            // Merge E-DNA profile into cleaned profile for personalization
+            const confidence = typeof ednaProfile.ednaProfile.confidence === 'string' 
+              ? parseFloat(ednaProfile.ednaProfile.confidence) 
+              : ednaProfile.ednaProfile.confidence;
+            cleanedProfile = {
+              ...cleanedProfile,
+              edna: {
+                coreType: ednaProfile.ednaProfile.coreType,
+                typeId: ednaProfile.user?.typeId || ednaProfile.ednaProfile.coreType,
+                subtype: ednaProfile.ednaProfile.subtype,
+                confidence: confidence || 0,
+                tier: ednaProfile.user?.tier,
+              },
+            };
+            console.log(`🧬 [ChatService] E-DNA profile loaded: ${ednaProfile.ednaProfile.coreType} (${confidence} confidence)`);
+          }
+        } catch (error: any) {
+          console.warn(`⚠️ [ChatService] Could not fetch E-DNA profile:`, error?.message);
+          // Continue without E-DNA profile - not critical
+        }
+      }
 
       // Check if premium model is allowed before generating advice
       const premiumCheck = await this.creditService.canUsePremiumModel(userId);
@@ -126,15 +169,25 @@ export class ChatService {
         }
       }
 
-      // Generate personalized advice with cleaned profile and short context
+      // 🧬 Get E-DNA profile for the user (cached, or fetch if not available)
+      let ednaProfile: any = null;
+      if (this.ednaProfileService.isEnabled() && userId !== '00000000-0000-0000-0000-000000000000') {
+        ednaProfile = await this.ednaProfileService.getEdnaProfile(userId);
+        if (ednaProfile) {
+          console.log(`🧬 [ChatService] Using E-DNA profile: ${ednaProfile.layers?.layer1?.coreType} - ${ednaProfile.layers?.layer2?.subtype}`);
+        }
+      }
+
+      // Generate personalized advice with cleaned profile, E-DNA profile, and short context
       // Pass history WITHOUT the current message (it's passed separately as userMessage parameter)
       const adviceResult = await this.adviceGenerator.generateAdviceWithProfile(
         message,
         cleanedProfile,
         historyBeforeCurrent, // Reuse the variable declared above
         finalLLM,
-        sessionId,
+        actualSessionId,
         userId,
+        ednaProfile, // 🧬 Pass E-DNA profile for personalization
       );
 
       // Generate context-aware recommendations
@@ -147,7 +200,7 @@ export class ChatService {
       // ✅ Save assistant message to database with all metadata
       const assistantSequenceNumber = nextSequenceNumber + 1;
       await this.chatRepository.saveAssistantMessage(
-        sessionId,
+        actualSessionId,
         userId,
         adviceResult.response,
         assistantSequenceNumber,
@@ -159,7 +212,7 @@ export class ChatService {
       );
 
       // ✅ Update session in database (title, profile, message count, last activity)
-      const messageCount = await this.chatRepository.getSessionMessageCount(sessionId);
+      const messageCount = await this.chatRepository.getSessionMessageCount(actualSessionId);
       
       // Auto-generate title from first user message if not set
       // Explicitly convert null to undefined for TypeScript type safety
@@ -186,11 +239,11 @@ export class ChatService {
         sessionUpdates.title = title;
       }
 
-      await this.chatRepository.updateSession(sessionId, userId, sessionUpdates);
+      await this.chatRepository.updateSession(actualSessionId, userId, sessionUpdates);
 
       return {
         response: adviceResult.response,
-        sessionId, // Always return the same session ID
+        sessionId: actualSessionId, // Return the actual session ID from database
         analysis,
         recommendations,
         reasoning: adviceResult.reasoning, // Include reasoning in response
@@ -343,7 +396,14 @@ export class ChatService {
     if (profile.darkTriad && passGate(profile.darkTriad)) modules.darkTriad = profile.darkTriad;
     if (profile.crt && passGate(profile.crt)) modules.crt = profile.crt;
     if (profile.attachment && passGate(profile.attachment)) modules.attachment = profile.attachment;
-    if (profile.enneagram && passGate(profile.enneagram)) modules.enneagram = profile.enneagram;
+    // Enneagram uses lower threshold (0.2) because KB returns low confidence for ambiguous messages
+    if (profile.enneagram) {
+      const conf = profile.enneagram.Confidence ?? profile.enneagram.confidence;
+      const evidence = profile.enneagram.Evidence ?? profile.enneagram.evidence;
+      // Accept if confidence >= 0.2 (lower than standard 0.5) AND has evidence
+      const passed = conf === undefined || (typeof conf === 'number' && conf >= 0.2 && Array.isArray(evidence) && evidence.length > 0);
+      if (passed) modules.enneagram = profile.enneagram;
+    }
 
     if (profile.mbti && passGate(profile.mbti)) modules.mbti = profile.mbti;
     if (profile.erikson && passGate(profile.erikson)) modules.erikson = profile.erikson;

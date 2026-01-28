@@ -1,8 +1,12 @@
 import * as dotenv from 'dotenv';
-import { join } from 'path';
+import { join, resolve } from 'path';
 
 // Load .env file before anything else
-dotenv.config({ path: join(__dirname, '..', '..', '.env') });
+// In development: dist/src -> backend/.env (../../.env)
+// In production: dist/src -> backend/.env (../../.env)
+const envPath = resolve(__dirname, '..', '..', '.env');
+console.log('📁 [Bootstrap] Looking for .env at:', envPath);
+dotenv.config({ path: envPath, override: true });
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
@@ -65,8 +69,10 @@ async function bootstrap() {
     console.log('🌐 [Bootstrap] Configuring CORS...');
     app.enableCors({
       origin: [
+        'http://localhost:9001',
         'http://localhost:8000',
         'http://192.168.1.79:8000',
+        'http://192.168.1.79:9001',
         'https://main.d3970mma5pzr9g.amplifyapp.com',
         /\.amplifyapp\.com$/, // Allow any Amplify domain
         /\.elasticbeanstalk\.com$/, // Allow Elastic Beanstalk domains

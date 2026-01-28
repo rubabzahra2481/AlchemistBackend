@@ -17,6 +17,9 @@ import { CreditService } from './services/credit.service';
 import { SubscriptionService } from './services/subscription.service';
 import { DatabaseModule } from './database/database.module';
 import { ChatRepository } from './repositories/chat.repository';
+import { ChatRepositoryAdapter } from './repositories/chat-repository.adapter';
+import { IOSBackendService } from './services/ios-backend.service';
+import { EdnaProfileService } from './services/edna-profile.service';
 
 @Module({
   imports: [
@@ -43,6 +46,11 @@ import { ChatRepository } from './repositories/chat.repository';
     SubscriptionService,
     // Database
     ChatRepository, // ✅ Add repository
+    ChatRepositoryAdapter, // 🔄 Adapter (switches between local DB and iOS backend)
+    // iOS Backend Integration
+    IOSBackendService, // 🔗 Connect to iOS app backend
+    // E-DNA Profile Service
+    EdnaProfileService, // 🧬 E-DNA profile fetching and caching
   ],
 })
 export class AppModule {}

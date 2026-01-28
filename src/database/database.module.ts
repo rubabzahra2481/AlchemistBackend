@@ -30,6 +30,11 @@ import { ChatMessage } from '../entities/chat-message.entity';
           console.log('🗄️ [DatabaseModule] Host:', url.hostname);
           console.log('🗄️ [DatabaseModule] Port:', parseInt(url.port, 10) || 5432);
           
+          // Disable SSL for local development (localhost)
+          const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+          const sslConfig = isLocalhost ? false : { rejectUnauthorized: false };
+          console.log('🗄️ [DatabaseModule] SSL:', isLocalhost ? 'disabled (localhost)' : 'enabled');
+          
           const config = {
             type: 'postgres' as const,
             host: url.hostname,
@@ -38,10 +43,8 @@ import { ChatMessage } from '../entities/chat-message.entity';
             password: url.password,
             database: databaseName,
             entities: [ChatSession, ChatMessage],
-            synchronize: false, // ✅ NEVER use synchronize in production - use migrations instead
-            ssl: {
-              rejectUnauthorized: false, // For Aurora Postgres RDS
-            },
+            synchronize: true, // Enable for local development to auto-create tables
+            ssl: sslConfig,
             logging: configService.get<string>('NODE_ENV') === 'development',
             // Connection pool settings (pg driver options)
             extra: {

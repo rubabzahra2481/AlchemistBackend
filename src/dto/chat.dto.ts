@@ -18,6 +18,11 @@ export class ChatRequestDto {
   @IsString()
   @Length(1, 50, { message: 'Selected LLM must be between 1 and 50 characters' })
   selectedLLM?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(36, 36, { message: 'User ID must be a valid UUID (36 characters)' })
+  userId?: string;  // iOS app user ID for E-DNA personalization
 }
 
 export class ChatResponseDto {
