@@ -7,6 +7,10 @@ import { IOSBackendService } from '../services/ios-backend.service';
  * 
  * All chat data (sessions, messages) is stored in Munawar's backend → Supabase.
  * No local database required.
+ * 
+ * All methods accept optional userJwt parameter:
+ * - Production: JWT passed from iOS app in request header
+ * - Local dev: Falls back to test credentials
  */
 @Injectable()
 export class ChatRepositoryAdapter {
@@ -24,10 +28,11 @@ export class ChatRepositoryAdapter {
     sessionId: string,
     userId: string,
     selectedLLM?: string,
+    userJwt?: string,
   ): Promise<any> {
     try {
       // Try to get existing session first
-      const existing = await this.iosBackend.getSession(sessionId);
+      const existing = await this.iosBackend.getSession(sessionId, userJwt);
       if (existing?.success) {
         return {
           id: existing.session.id,
@@ -43,7 +48,7 @@ export class ChatRepositoryAdapter {
     }
     
     // Create new session
-    const result = await this.iosBackend.createSession(userId, undefined, { selectedLLM });
+    const result = await this.iosBackend.createSession(userId, undefined, { selectedLLM }, userJwt);
     return {
       id: result.session.id,
       userId: result.session.userId,
@@ -62,10 +67,11 @@ export class ChatRepositoryAdapter {
     userId: string,
     content: string,
     sequenceNumber: number,
+    userJwt?: string,
   ): Promise<any> {
     const result = await this.iosBackend.createMessage(sessionId, 'user', content, {
       sequenceNumber,
-    });
+    }, userJwt);
     return {
       id: result.message.id,
       sessionId: result.message.sessionId,
@@ -89,6 +95,7 @@ export class ChatRepositoryAdapter {
     recommendations?: string[],
     profileSnapshot?: any,
     frameworksTriggered?: string[],
+    userJwt?: string,
   ): Promise<any> {
     const result = await this.iosBackend.createMessage(sessionId, 'agent', content, {
       sequenceNumber,
@@ -98,7 +105,7 @@ export class ChatRepositoryAdapter {
       recommendations,
       profileSnapshot,
       frameworksTriggered,
-    });
+    }, userJwt);
     return {
       id: result.message.id,
       sessionId: result.message.sessionId,
@@ -120,6 +127,7 @@ export class ChatRepositoryAdapter {
       messageCount?: number;
       selectedLLM?: string;
     },
+    userJwt?: string,
   ): Promise<void> {
     await this.iosBackend.updateSession(sessionId, {
       title: updates.title,
@@ -127,15 +135,15 @@ export class ChatRepositoryAdapter {
         currentProfile: updates.currentProfile,
         selectedLLM: updates.selectedLLM,
       },
-    });
+    }, userJwt);
   }
 
   /**
    * Get all messages for a session
    */
-  async getSessionMessages(sessionId: string, userId: string): Promise<any[]> {
+  async getSessionMessages(sessionId: string, userId: string, userJwt?: string): Promise<any[]> {
     try {
-      const result = await this.iosBackend.getSessionMessages(sessionId);
+      const result = await this.iosBackend.getSessionMessages(sessionId, 100, 0, userJwt);
       return result.messages.map(m => ({
         id: m.id,
         sessionId: m.sessionId,
@@ -157,9 +165,9 @@ export class ChatRepositoryAdapter {
   /**
    * Get all sessions for a user
    */
-  async getUserSessions(userId: string): Promise<any[]> {
+  async getUserSessions(userId: string, userJwt?: string): Promise<any[]> {
     try {
-      const result = await this.iosBackend.getUserSessions(userId);
+      const result = await this.iosBackend.getUserSessions(userId, undefined, 20, userJwt);
       return result.sessions.map(s => ({
         id: s.id,
         title: s.title,
@@ -177,9 +185,9 @@ export class ChatRepositoryAdapter {
   /**
    * Get a single session by ID
    */
-  async getSessionById(sessionId: string, userId: string): Promise<any | null> {
+  async getSessionById(sessionId: string, userId: string, userJwt?: string): Promise<any | null> {
     try {
-      const result = await this.iosBackend.getSession(sessionId);
+      const result = await this.iosBackend.getSession(sessionId, userJwt);
       if (!result?.success) return null;
       return {
         id: result.session.id,
@@ -197,22 +205,22 @@ export class ChatRepositoryAdapter {
   /**
    * Delete a session
    */
-  async deleteSession(sessionId: string, userId: string): Promise<void> {
-    await this.iosBackend.deleteSession(sessionId);
+  async deleteSession(sessionId: string, userId: string, userJwt?: string): Promise<void> {
+    await this.iosBackend.deleteSession(sessionId, userJwt);
   }
 
   /**
    * Get session message count
    */
-  async getSessionMessageCount(sessionId: string): Promise<number> {
-    return await this.iosBackend.getMessageCount(sessionId);
+  async getSessionMessageCount(sessionId: string, userJwt?: string): Promise<number> {
+    return await this.iosBackend.getMessageCount(sessionId, userJwt);
   }
 
   /**
    * Get last message for a session
    */
-  async getLastMessageForSession(sessionId: string, userId: string): Promise<any | null> {
-    const result = await this.iosBackend.getLastMessage(sessionId);
+  async getLastMessageForSession(sessionId: string, userId: string, userJwt?: string): Promise<any | null> {
+    const result = await this.iosBackend.getLastMessage(sessionId, userJwt);
     if (!result?.success) return null;
     return {
       id: result.message.id,
@@ -226,7 +234,7 @@ export class ChatRepositoryAdapter {
   /**
    * Get user's E-DNA profile from iOS backend
    */
-  async getUserEDNAProfile(userId: string): Promise<any | null> {
-    return await this.iosBackend.getUserProfile(userId);
+  async getUserEDNAProfile(userId: string, userJwt?: string): Promise<any | null> {
+    return await this.iosBackend.getUserProfile(userId, userJwt);
   }
 }

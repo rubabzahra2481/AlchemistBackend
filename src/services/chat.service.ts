@@ -51,12 +51,14 @@ export class ChatService {
    * Main method to process user messages
    * Uses parallel LLM approach with Smart Incremental analysis (Option 2)
    * @param userId - User ID (can be anonymous for non-authenticated usage)
+   * @param userJwt - JWT token from iOS app for production (passed to Munawar's backend)
    */
   async processMessage(
     message: string,
     sessionId: string,
     selectedLLM: string = 'gpt-4o',
     userId: string = '00000000-0000-0000-0000-000000000000', // Default anonymous UUID
+    userJwt?: string, // JWT from iOS app
   ): Promise<ChatResponseDto> {
     try {
 
@@ -65,19 +67,20 @@ export class ChatService {
         sessionId,
         userId,
         selectedLLM,
+        userJwt, // Pass JWT for iOS backend auth
       );
       
       // Use the actual session ID from the database (may differ from input for iOS backend)
       const actualSessionId = session.id || sessionId;
 
       // ✅ Load existing messages from database
-      const existingMessages = await this.chatRepository.getSessionMessages(actualSessionId, userId);
+      const existingMessages = await this.chatRepository.getSessionMessages(actualSessionId, userId, userJwt);
       
       // ✅ Get next sequence number
       const nextSequenceNumber = existingMessages.length + 1;
 
       // ✅ Save user message to database
-      await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber);
+      await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber, userJwt);
 
       // ✅ Build history array for analysis (from existing messages + new message)
       // Ensure all timestamps are valid Date objects for ConversationMessage interface
@@ -134,7 +137,7 @@ export class ChatService {
       // 🔗 Fetch E-DNA profile from iOS backend if enabled (for personalization)
       if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
         try {
-          const ednaProfile = await this.iosBackend.getUserProfile(userId);
+          const ednaProfile = await this.iosBackend.getUserProfile(userId, userJwt);
           if (ednaProfile?.success && ednaProfile.ednaProfile) {
             // Merge E-DNA profile into cleaned profile for personalization
             const confidence = typeof ednaProfile.ednaProfile.confidence === 'string' 
@@ -172,7 +175,7 @@ export class ChatService {
       // 🧬 Get E-DNA profile for the user (cached, or fetch if not available)
       let ednaProfile: any = null;
       if (this.ednaProfileService.isEnabled() && userId !== '00000000-0000-0000-0000-000000000000') {
-        ednaProfile = await this.ednaProfileService.getEdnaProfile(userId);
+        ednaProfile = await this.ednaProfileService.getEdnaProfile(userId, false, userJwt);
         if (ednaProfile) {
           console.log(`🧬 [ChatService] Using E-DNA profile: ${ednaProfile.layers?.layer1?.coreType} - ${ednaProfile.layers?.layer2?.subtype}`);
         }
@@ -209,10 +212,12 @@ export class ChatService {
         analysis,
         recommendations,
         cleanedProfile,
+        undefined, // frameworksTriggered
+        userJwt,
       );
 
       // ✅ Update session in database (title, profile, message count, last activity)
-      const messageCount = await this.chatRepository.getSessionMessageCount(actualSessionId);
+      const messageCount = await this.chatRepository.getSessionMessageCount(actualSessionId, userJwt);
       
       // Auto-generate title from first user message if not set
       // Explicitly convert null to undefined for TypeScript type safety
@@ -239,7 +244,7 @@ export class ChatService {
         sessionUpdates.title = title;
       }
 
-      await this.chatRepository.updateSession(actualSessionId, userId, sessionUpdates);
+      await this.chatRepository.updateSession(actualSessionId, userId, sessionUpdates, userJwt);
 
       return {
         response: adviceResult.response,
@@ -1008,9 +1013,9 @@ export class ChatService {
   /**
    * Gets conversation history for a session
    */
-  async getSessionHistory(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000'): Promise<any[]> {
+  async getSessionHistory(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000', userJwt?: string): Promise<any[]> {
     // ✅ Get messages from database
-    const messages = await this.chatRepository.getSessionMessages(sessionId, userId);
+    const messages = await this.chatRepository.getSessionMessages(sessionId, userId, userJwt);
     return messages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -1025,9 +1030,9 @@ export class ChatService {
   /**
    * Clears a session
    */
-  async clearSession(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000'): Promise<void> {
+  async clearSession(sessionId: string, userId: string = '00000000-0000-0000-0000-000000000000', userJwt?: string): Promise<void> {
     // ✅ Delete session from database (cascade delete will remove all messages)
-    await this.chatRepository.deleteSession(sessionId, userId);
+    await this.chatRepository.deleteSession(sessionId, userId, userJwt);
     
     // Also clear from other services for compatibility
     this.personalityAnalyzer.clearHistory(sessionId);
@@ -1039,14 +1044,15 @@ export class ChatService {
    * @param sessionId - Session ID to rename
    * @param userId - User ID to verify ownership
    * @param newTitle - New title for the session
+   * @param userJwt - JWT for iOS backend auth
    */
-  async renameSession(sessionId: string, userId: string, newTitle: string): Promise<void> {
+  async renameSession(sessionId: string, userId: string, newTitle: string, userJwt?: string): Promise<void> {
     if (!userId || !newTitle || !newTitle.trim()) {
       throw new Error('User ID and title are required');
     }
 
     // Check if session exists and user owns it
-    const session = await this.chatRepository.getSessionById(sessionId, userId);
+    const session = await this.chatRepository.getSessionById(sessionId, userId, userJwt);
     if (!session) {
       throw new Error('Session not found or you do not have permission to rename it');
     }
@@ -1054,19 +1060,19 @@ export class ChatService {
     // Update session title (session existence already verified above)
     await this.chatRepository.updateSession(sessionId, userId, {
       title: newTitle.trim(),
-    });
+    }, userJwt);
   }
 
   /**
    * Get all sessions for a user
    */
-  async getAllSessions(userId: string = '00000000-0000-0000-0000-000000000000') {
+  async getAllSessions(userId: string = '00000000-0000-0000-0000-000000000000', userJwt?: string) {
     // ✅ Get sessions from database
-    const sessions = await this.chatRepository.getUserSessions(userId);
+    const sessions = await this.chatRepository.getUserSessions(userId, userJwt);
     // Get last message for each session to show in sidebar
     const sessionsWithLastMessage = await Promise.all(
       sessions.map(async (s) => {
-        const lastMessage = await this.chatRepository.getLastMessageForSession(s.id, userId);
+        const lastMessage = await this.chatRepository.getLastMessageForSession(s.id, userId, userJwt);
         return {
           id: s.id,
           title: s.title || 'Untitled Chat',

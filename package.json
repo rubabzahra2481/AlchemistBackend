@@ -22,18 +22,7 @@
     "qa:evaluate": "ts-node scripts/evaluate-quality.ts",
     "qa:analyze": "ts-node scripts/analyze-patterns.ts",
     "qa:full": "npm run qa:generate && npm run qa:evaluate && npm run qa:analyze",
-    "db:create": "ts-node scripts/create-database.ts",
-    "db:test": "ts-node scripts/test-connection.ts",
-    "db:list": "ts-node scripts/list-databases.ts",
-    "db:check": "ts-node scripts/check-active-database.ts",
-    "db:tables": "ts-node scripts/list-tables-in-db.ts",
-    "db:dates": "ts-node scripts/check-db-creation-dates.ts",
-    "db:test-chat": "ts-node scripts/test-chat-storage.ts",
-    "db:test-repo": "ts-node scripts/test-chat-api.ts",
-    "test:startup": "ts-node scripts/test-startup.ts",
-    "migration:run": "ts-node scripts/run-migration.ts run",
-    "migration:revert": "ts-node scripts/run-migration.ts revert",
-    "migration:show": "ts-node scripts/run-migration.ts show"
+    "test:startup": "ts-node scripts/test-startup.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",

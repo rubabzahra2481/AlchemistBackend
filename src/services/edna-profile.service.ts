@@ -129,8 +129,9 @@ export class EdnaProfileService {
    * Fetch and build E-DNA profile for a user
    * Results are cached in memory
    * Falls back to mock profile for testing when iOS backend is unavailable
+   * @param userJwt - JWT token from iOS app for production auth
    */
-  async getEdnaProfile(userId: string, forceRefresh: boolean = false): Promise<EdnaProfileFull | null> {
+  async getEdnaProfile(userId: string, forceRefresh: boolean = false, userJwt?: string): Promise<EdnaProfileFull | null> {
     // Check cache first (unless force refresh)
     if (!forceRefresh && this.profileCache.has(userId)) {
       console.log(`🧬 [EdnaProfile] Returning cached profile for user ${userId}`);
@@ -141,7 +142,7 @@ export class EdnaProfileService {
       console.log(`🧬 [EdnaProfile] Fetching quiz results for user ${userId}...`);
       
       // Fetch quiz results from iOS backend
-      const quizResults = await this.fetchQuizResults(userId);
+      const quizResults = await this.fetchQuizResults(userId, userJwt);
       
       if (!quizResults || !quizResults.hasQuizResults || !quizResults.quizResult) {
         console.log(`⚠️ [EdnaProfile] No quiz results found for user ${userId}, using mock profile for testing`);
@@ -279,11 +280,12 @@ export class EdnaProfileService {
 
   /**
    * Fetch quiz results from iOS backend API
+   * @param userJwt - JWT token from iOS app for production auth
    */
-  private async fetchQuizResults(userId: string): Promise<QuizResultsResponse | null> {
+  private async fetchQuizResults(userId: string, userJwt?: string): Promise<QuizResultsResponse | null> {
     try {
       // Use the iOS backend service to make authenticated request
-      const response = await this.iosBackend.getUserQuizResults(userId);
+      const response = await this.iosBackend.getUserQuizResults(userId, userJwt);
       return response as QuizResultsResponse;
     } catch (error: any) {
       console.error(`❌ [EdnaProfile] API error:`, error.message);

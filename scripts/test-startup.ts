@@ -1,6 +1,9 @@
 /**
  * Test script to simulate App Runner startup process
  * This will catch initialization errors before deployment
+ * 
+ * NOTE: This backend is STATELESS - no database required!
+ * All data storage is handled by Munawar's backend.
  */
 
 import * as dotenv from 'dotenv';
@@ -29,15 +32,17 @@ if (!envLoaded) {
 
 async function testStartup() {
   console.log('🧪 [Test Startup] Testing application startup...\n');
+  console.log('📝 NOTE: This backend is STATELESS - no database required!');
+  console.log('📝 All data storage is handled by Munawar\'s backend.\n');
   
   // Step 1: Check environment variables
   console.log('📋 [Step 1] Checking environment variables:');
   const requiredEnvVars = {
-    DATABASE_URL: process.env.DATABASE_URL,
-    SUPABASE_URL: process.env.SUPABASE_URL,
-    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
-    PORT: process.env.PORT || '5000',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    IOS_BACKEND_URL: process.env.IOS_BACKEND_URL,
+    USE_IOS_BACKEND: process.env.USE_IOS_BACKEND,
+    USE_IOS_EDNA: process.env.USE_IOS_EDNA,
+    PORT: process.env.PORT || '8080',
   };
   
   const missing: string[] = [];
@@ -46,7 +51,7 @@ async function testStartup() {
       console.log(`   - ${key}: ${value} (default)`);
     } else if (value) {
       // Mask sensitive values
-      if (key.includes('KEY') || key.includes('PASSWORD') || key === 'DATABASE_URL') {
+      if (key.includes('KEY') || key.includes('PASSWORD') || key.includes('SECRET')) {
         const masked = value.length > 20 ? `${value.substring(0, 10)}...${value.substring(value.length - 5)}` : '***';
         console.log(`   - ${key}: ✅ Set (${masked})`);
       } else {
@@ -54,7 +59,8 @@ async function testStartup() {
       }
     } else {
       console.log(`   - ${key}: ❌ Missing`);
-      if (key !== 'OPENAI_API_KEY') { // OPENAI_API_KEY is optional if other LLMs are used
+      // OPENAI_API_KEY and IOS_BACKEND_URL are critical
+      if (key === 'OPENAI_API_KEY' || key === 'IOS_BACKEND_URL') {
         missing.push(key);
       }
     }
@@ -66,59 +72,28 @@ async function testStartup() {
     process.exit(1);
   }
   
-  console.log('\n✅ [Step 1] All required environment variables are set\n');
+  console.log('\n✅ [Step 1] Required environment variables are set\n');
   
-  // Step 2: Test Supabase client initialization
-  console.log('📋 [Step 2] Testing Supabase client initialization...');
+  // Step 2: Test NestJS module imports
+  console.log('📋 [Step 2] Testing NestJS module imports...');
   try {
-    const { createClient } = require('@supabase/supabase-js');
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+    // Test importing AppModule
+    const { AppModule } = require('../src/app.module');
+    console.log('✅ [Step 2] AppModule imported successfully');
     
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    console.log('✅ [Step 2] Supabase client created successfully');
+    // Test importing main services
+    const { ChatService } = require('../src/services/chat.service');
+    const { IOSBackendService } = require('../src/services/ios-backend.service');
+    console.log('✅ [Step 2] Core services imported successfully');
   } catch (error: any) {
-    console.error('❌ [Step 2] Failed to create Supabase client:', error.message);
+    console.error('❌ [Step 2] Failed to import modules:', error.message);
+    console.error('❌ [Step 2] This indicates a build or module structure issue');
     console.error('❌ [Step 2] Stack:', error.stack);
     process.exit(1);
   }
   
-  // Step 3: Test database URL parsing
-  console.log('\n📋 [Step 3] Testing database URL parsing...');
-  try {
-    const databaseUrl = process.env.DATABASE_URL!;
-    const url = new URL(databaseUrl);
-    console.log('✅ [Step 3] Database URL parsed successfully');
-    console.log(`   - Host: ${url.hostname}`);
-    console.log(`   - Port: ${parseInt(url.port, 10) || 5432}`);
-    console.log(`   - Database: ${url.pathname.slice(1)}`);
-    console.log(`   - Username: ${url.username}`);
-  } catch (error: any) {
-    console.error('❌ [Step 3] Failed to parse DATABASE_URL:', error.message);
-    console.error('❌ [Step 3] DATABASE_URL format should be: postgresql://user:password@host:port/database');
-    process.exit(1);
-  }
-  
-  // Step 4: Test NestJS module imports
-  console.log('\n📋 [Step 4] Testing NestJS module imports...');
-  try {
-    // Test importing AppModule
-    const { AppModule } = require('../src/app.module');
-    console.log('✅ [Step 4] AppModule imported successfully');
-    
-    // Test importing main services
-    const { SupabaseAuthService } = require('../src/services/supabase-auth.service');
-    const { ChatService } = require('../src/services/chat.service');
-    console.log('✅ [Step 4] Core services imported successfully');
-  } catch (error: any) {
-    console.error('❌ [Step 4] Failed to import modules:', error.message);
-    console.error('❌ [Step 4] This indicates a build or module structure issue');
-    console.error('❌ [Step 4] Stack:', error.stack);
-    process.exit(1);
-  }
-  
-  // Step 5: Try to create NestJS application (this will test all DI and module initialization)
-  console.log('\n📋 [Step 5] Testing NestJS application creation (this may take a moment)...');
+  // Step 3: Try to create NestJS application (this will test all DI and module initialization)
+  console.log('\n📋 [Step 3] Testing NestJS application creation (this may take a moment)...');
   try {
     const { NestFactory } = require('@nestjs/core');
     const { AppModule } = require('../src/app.module');
@@ -128,18 +103,18 @@ async function testStartup() {
       logger: ['error', 'warn'], // Only show errors/warnings
     });
     
-    console.log('✅ [Step 5] NestJS application created successfully');
-    console.log('✅ [Step 5] All modules, services, and dependencies initialized');
+    console.log('✅ [Step 3] NestJS application created successfully');
+    console.log('✅ [Step 3] All modules, services, and dependencies initialized');
     
     // Close the app
     await app.close();
   } catch (error: any) {
-    console.error('❌ [Step 5] Failed to create NestJS application:');
-    console.error('❌ [Step 5] Error:', error.message);
-    console.error('❌ [Step 5] This is likely the error causing App Runner rollback!');
-    console.error('❌ [Step 5] Full error:', error);
+    console.error('❌ [Step 3] Failed to create NestJS application:');
+    console.error('❌ [Step 3] Error:', error.message);
+    console.error('❌ [Step 3] This is likely the error causing App Runner rollback!');
+    console.error('❌ [Step 3] Full error:', error);
     if (error.stack) {
-      console.error('❌ [Step 5] Stack trace:');
+      console.error('❌ [Step 3] Stack trace:');
       console.error(error.stack);
     }
     process.exit(1);
@@ -156,4 +131,3 @@ testStartup().catch((error) => {
   console.error('❌ [Test Startup] Unhandled error:', error);
   process.exit(1);
 });
-

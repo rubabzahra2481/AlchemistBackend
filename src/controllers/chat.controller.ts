@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, Delete, Patch, Res, UseGuards, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Delete, Patch, Res, UseGuards, Query, HttpException, HttpStatus, Headers } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
@@ -13,6 +13,19 @@ import { ParallelLLMService } from '../services/parallel-llm.service';
 
 // Default anonymous user ID for non-authenticated usage
 const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Extract JWT token from Authorization header
+ * Format: "Bearer <token>" -> returns just the token
+ */
+function extractJwtFromHeader(authHeader?: string): string | undefined {
+  if (!authHeader) return undefined;
+  const parts = authHeader.split(' ');
+  if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+    return parts[1];
+  }
+  return undefined;
+}
 
 @ApiTags('chat')
 @Controller('chat')
@@ -30,16 +43,20 @@ export class ChatController {
   @ApiResponse({ status: 200, description: 'Returns advice and personality analysis' })
   async chat(
     @Body() chatRequest: ChatRequestDto,
+    @Headers('authorization') authHeader?: string,
   ): Promise<ChatResponseDto> {
     const sessionId = chatRequest.sessionId || uuidv4();
     const selectedLLM = chatRequest.selectedLLM || DEFAULT_LLM;
     // Use provided userId for iOS app users, or anonymous for non-authenticated usage
     const userId = chatRequest.userId || ANONYMOUS_USER_ID;
+    // Extract JWT from header for production use
+    const userJwt = extractJwtFromHeader(authHeader);
     return await this.chatService.processMessage(
       chatRequest.message,
       sessionId,
       selectedLLM,
       userId,
+      userJwt,
     );
   }
 
