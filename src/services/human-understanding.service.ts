@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { RagService } from './rag.service';
 
 export interface HumanProfile {
   // SILENT INTERNAL ASSESSMENT (Never shown to user)
@@ -38,33 +37,47 @@ export interface HumanProfile {
   emotionalTone: 'distressed' | 'neutral' | 'hopeful' | 'confused';
 }
 
+/**
+ * Human Understanding Service - SIMPLIFIED
+ * 
+ * Note: RAG functionality removed for App Runner compatibility.
+ * This service now uses basic heuristics.
+ */
 @Injectable()
 export class HumanUnderstandingService {
-  constructor(private ragService: RagService) {}
-
   /**
-   * Build deep understanding of the human from conversation
-   * This is SILENT - never shown to user
+   * Build understanding of the human from conversation
+   * Uses basic heuristics instead of RAG
    */
   async understandHuman(
     currentMessage: string,
     conversationHistory: Array<{ role: string; content: string }>,
   ): Promise<HumanProfile> {
-    const historyText = conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n');
-
-    // Use RAG to get deep psychological understanding
-    const understanding = await this.ragService.getDeepUnderstanding(historyText, currentMessage);
-
-    // Add conversation context analysis
     const context = this.analyzeConversationContext(currentMessage);
 
     return {
-      personality: understanding.personality,
-      mentalState: understanding.mentalState,
-      selfEsteem: understanding.selfConcept || { level: 'moderate', specificConcerns: [] },
-      interpersonalStyle: understanding.interpersonalStyle,
-      coreNeeds: understanding.coreNeeds,
-      bestApproach: understanding.bestApproach,
+      personality: {
+        openness: 'moderate',
+        conscientiousness: 'moderate',
+        extraversion: 'moderate',
+        agreeableness: 'moderate',
+        neuroticism: 'moderate',
+        confidence: 'medium',
+      },
+      mentalState: {
+        depression: 'none',
+        anxiety: 'none',
+        stress: 'none',
+        indicators: [],
+      },
+      selfEsteem: { level: 'moderate', specificConcerns: [] },
+      interpersonalStyle: {
+        machiavellianism: 'low',
+        narcissism: 'low',
+        psychopathy: 'low',
+      },
+      coreNeeds: ['understanding', 'guidance'],
+      bestApproach: 'empathetic and supportive',
       topic: context.topic,
       emotionalTone: context.emotionalTone,
     };
@@ -97,13 +110,11 @@ export class HumanUnderstandingService {
   }
 
   /**
-   * Generate natural human response using psychological understanding
-   * NO JARGON - sounds like a wise friend, not a psychologist
+   * Generate natural human response
    */
   generateHumanResponse(profile: HumanProfile): string {
-    const { mentalState, selfEsteem, coreNeeds, bestApproach } = profile;
+    const { mentalState, selfEsteem } = profile;
 
-    // Build empathetic opening based on their state
     let opening = '';
     if (mentalState.stress !== 'none' || mentalState.anxiety !== 'none') {
       opening = 'I can hear that this is weighing on you. ';
