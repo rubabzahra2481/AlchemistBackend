@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { join } from 'path';
 import { AppController } from './controllers/app.controller';
 import { ChatController } from './controllers/chat.controller';
 import { ChatService } from './services/chat.service';
@@ -15,18 +14,27 @@ import { DeepSeekProvider } from './providers/deepseek.provider';
 import { GeminiProvider } from './providers/gemini.provider';
 import { CreditService } from './services/credit.service';
 import { SubscriptionService } from './services/subscription.service';
-import { DatabaseModule } from './database/database.module';
-import { ChatRepository } from './repositories/chat.repository';
-import { ChatRepositoryAdapter } from './repositories/chat-repository.adapter';
 import { IOSBackendService } from './services/ios-backend.service';
 import { EdnaProfileService } from './services/edna-profile.service';
+import { ChatRepositoryAdapter } from './repositories/chat-repository.adapter';
 
+/**
+ * App Module - NO DATABASE REQUIRED
+ * 
+ * This backend is stateless. All data storage is handled by Munawar's backend:
+ * - Chat sessions/messages → Munawar's backend → Supabase
+ * - User profiles/E-DNA → Munawar's backend → Supabase
+ * 
+ * This backend only:
+ * - Processes messages with LLMs (OpenAI, Claude, etc.)
+ * - Calls Munawar's backend APIs for data
+ */
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    DatabaseModule, // ✅ Add database module
+    // NO DatabaseModule - all data goes to Munawar's backend
   ],
   controllers: [AppController, ChatController],
   providers: [
@@ -41,16 +49,15 @@ import { EdnaProfileService } from './services/edna-profile.service';
     DeepSeekProvider,
     GeminiProvider,
     LLMOrchestratorService,
-    // Credit System (no auth required)
+    // Credit System (mocked - no DB needed)
     CreditService,
     SubscriptionService,
-    // Database
-    ChatRepository, // ✅ Add repository
-    ChatRepositoryAdapter, // 🔄 Adapter (switches between local DB and iOS backend)
-    // iOS Backend Integration
-    IOSBackendService, // 🔗 Connect to iOS app backend
+    // Chat Repository Adapter (uses Munawar's backend API)
+    ChatRepositoryAdapter,
+    // iOS/Munawar Backend Integration
+    IOSBackendService,
     // E-DNA Profile Service
-    EdnaProfileService, // 🧬 E-DNA profile fetching and caching
+    EdnaProfileService,
   ],
 })
 export class AppModule {}

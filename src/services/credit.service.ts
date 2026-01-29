@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
-import { SUBSCRIPTION_PLANS } from '../config/subscription.config';
-import { SubscriptionTier } from '../entities/user-subscription.entity';
+import { SUBSCRIPTION_PLANS, SubscriptionTier } from '../config/subscription.config';
 
 export interface CreditCheckResult {
   allowed: boolean;
