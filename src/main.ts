@@ -60,6 +60,7 @@ async function bootstrap() {
         /\.elasticbeanstalk\.com$/,
         /\.ngrok-free\.app$/,
         /\.ngrok\.io$/,
+        /\.awsapprunner\.com$/,
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
