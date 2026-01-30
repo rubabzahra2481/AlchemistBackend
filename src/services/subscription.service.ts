@@ -24,21 +24,21 @@ export class SubscriptionService {
    * Get or create subscription for user (returns mock FREE subscription - no database)
    */
   async getOrCreateSubscription(userId: string): Promise<UserSubscription> {
-    const plan = SUBSCRIPTION_PLANS[SubscriptionTier.FREE];
-    const now = new Date();
+      const plan = SUBSCRIPTION_PLANS[SubscriptionTier.FREE];
+      const now = new Date();
     const cycleStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const cycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     const mockSubscription: UserSubscription = {
-      userId,
-      tier: SubscriptionTier.FREE,
-      tokensUsed: 0,
+        userId,
+        tier: SubscriptionTier.FREE,
+        tokensUsed: 0,
       tokensIncluded: 1000000,
-      billingCycleStart: cycleStart,
-      billingCycleEnd: cycleEnd,
-      premiumRepliesUsed: 0,
+        billingCycleStart: cycleStart,
+        billingCycleEnd: cycleEnd,
+        premiumRepliesUsed: 0,
       premiumRepliesIncluded: 100,
-      isActive: true,
+        isActive: true,
       createdAt: now,
       updatedAt: now,
     };

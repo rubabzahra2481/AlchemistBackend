@@ -30,33 +30,33 @@ export class ChatRepositoryAdapter {
     selectedLLM?: string,
     userJwt?: string,
   ): Promise<any> {
-    try {
-      // Try to get existing session first
+      try {
+        // Try to get existing session first
       const existing = await this.iosBackend.getSession(sessionId, userJwt);
-      if (existing?.success) {
-        return {
-          id: existing.session.id,
-          userId: existing.session.userId,
-          title: existing.session.title,
-          isActive: existing.session.isActive,
-          messageCount: existing.session.messageCount || 0,
-          createdAt: existing.session.startedAt,
-        };
+        if (existing?.success) {
+          return {
+            id: existing.session.id,
+            userId: existing.session.userId,
+            title: existing.session.title,
+            isActive: existing.session.isActive,
+            messageCount: existing.session.messageCount || 0,
+            createdAt: existing.session.startedAt,
+          };
+        }
+      } catch (error) {
+        // Session doesn't exist, create new one
       }
-    } catch (error) {
-      // Session doesn't exist, create new one
-    }
-    
-    // Create new session
+      
+      // Create new session
     const result = await this.iosBackend.createSession(userId, undefined, { selectedLLM }, userJwt);
-    return {
-      id: result.session.id,
-      userId: result.session.userId,
-      title: result.session.title,
-      isActive: result.session.isActive,
-      messageCount: 0,
-      createdAt: result.session.startedAt,
-    };
+      return {
+        id: result.session.id,
+        userId: result.session.userId,
+        title: result.session.title,
+        isActive: result.session.isActive,
+        messageCount: 0,
+        createdAt: result.session.startedAt,
+      };
   }
 
   /**
@@ -69,16 +69,16 @@ export class ChatRepositoryAdapter {
     sequenceNumber: number,
     userJwt?: string,
   ): Promise<any> {
-    const result = await this.iosBackend.createMessage(sessionId, 'user', content, {
-      sequenceNumber,
+      const result = await this.iosBackend.createMessage(sessionId, 'user', content, {
+        sequenceNumber,
     }, userJwt);
-    return {
-      id: result.message.id,
-      sessionId: result.message.sessionId,
-      role: result.message.role,
-      content: result.message.content,
-      createdAt: result.message.createdAt,
-    };
+      return {
+        id: result.message.id,
+        sessionId: result.message.sessionId,
+        role: result.message.role,
+        content: result.message.content,
+        createdAt: result.message.createdAt,
+      };
   }
 
   /**
@@ -97,22 +97,22 @@ export class ChatRepositoryAdapter {
     frameworksTriggered?: string[],
     userJwt?: string,
   ): Promise<any> {
-    const result = await this.iosBackend.createMessage(sessionId, 'agent', content, {
-      sequenceNumber,
-      selectedLLM,
-      reasoning,
-      analysis,
-      recommendations,
-      profileSnapshot,
-      frameworksTriggered,
+      const result = await this.iosBackend.createMessage(sessionId, 'agent', content, {
+        sequenceNumber,
+        selectedLLM,
+        reasoning,
+        analysis,
+        recommendations,
+        profileSnapshot,
+        frameworksTriggered,
     }, userJwt);
-    return {
-      id: result.message.id,
-      sessionId: result.message.sessionId,
-      role: result.message.role,
-      content: result.message.content,
-      createdAt: result.message.createdAt,
-    };
+      return {
+        id: result.message.id,
+        sessionId: result.message.sessionId,
+        role: result.message.role,
+        content: result.message.content,
+        createdAt: result.message.createdAt,
+      };
   }
 
   /**
@@ -129,12 +129,12 @@ export class ChatRepositoryAdapter {
     },
     userJwt?: string,
   ): Promise<void> {
-    await this.iosBackend.updateSession(sessionId, {
-      title: updates.title,
-      context: {
-        currentProfile: updates.currentProfile,
-        selectedLLM: updates.selectedLLM,
-      },
+      await this.iosBackend.updateSession(sessionId, {
+        title: updates.title,
+        context: {
+          currentProfile: updates.currentProfile,
+          selectedLLM: updates.selectedLLM,
+        },
     }, userJwt);
   }
 
@@ -142,64 +142,64 @@ export class ChatRepositoryAdapter {
    * Get all messages for a session
    */
   async getSessionMessages(sessionId: string, userId: string, userJwt?: string): Promise<any[]> {
-    try {
+      try {
       const result = await this.iosBackend.getSessionMessages(sessionId, 100, 0, userJwt);
-      return result.messages.map(m => ({
-        id: m.id,
-        sessionId: m.sessionId,
-        role: m.role === 'agent' ? 'assistant' : m.role,
-        content: m.content,
-        createdAt: new Date(m.createdAt),
-        sequenceNumber: m.metadata?.sequenceNumber,
-        reasoning: m.metadata?.reasoning,
-        analysis: m.metadata?.analysis,
-        recommendations: m.metadata?.recommendations,
-        profileSnapshot: m.metadata?.profileSnapshot,
-      }));
-    } catch (error) {
-      console.warn(`⚠️ [ChatRepositoryAdapter] Could not fetch messages: ${error}`);
-      return [];
-    }
+        return result.messages.map(m => ({
+          id: m.id,
+          sessionId: m.sessionId,
+          role: m.role === 'agent' ? 'assistant' : m.role,
+          content: m.content,
+          createdAt: new Date(m.createdAt),
+          sequenceNumber: m.metadata?.sequenceNumber,
+          reasoning: m.metadata?.reasoning,
+          analysis: m.metadata?.analysis,
+          recommendations: m.metadata?.recommendations,
+          profileSnapshot: m.metadata?.profileSnapshot,
+        }));
+      } catch (error) {
+        console.warn(`⚠️ [ChatRepositoryAdapter] Could not fetch messages: ${error}`);
+        return [];
+      }
   }
 
   /**
    * Get all sessions for a user
    */
   async getUserSessions(userId: string, userJwt?: string): Promise<any[]> {
-    try {
+      try {
       const result = await this.iosBackend.getUserSessions(userId, undefined, 20, userJwt);
-      return result.sessions.map(s => ({
-        id: s.id,
-        title: s.title,
-        lastActivity: s.endedAt || s.startedAt,
-        messageCount: s.messageCount,
-        createdAt: s.startedAt,
-        isActive: s.isActive,
-      }));
-    } catch (error) {
-      console.warn(`⚠️ [ChatRepositoryAdapter] Could not fetch sessions: ${error}`);
-      return [];
-    }
+        return result.sessions.map(s => ({
+          id: s.id,
+          title: s.title,
+          lastActivity: s.endedAt || s.startedAt,
+          messageCount: s.messageCount,
+          createdAt: s.startedAt,
+          isActive: s.isActive,
+        }));
+      } catch (error) {
+        console.warn(`⚠️ [ChatRepositoryAdapter] Could not fetch sessions: ${error}`);
+        return [];
+      }
   }
 
   /**
    * Get a single session by ID
    */
   async getSessionById(sessionId: string, userId: string, userJwt?: string): Promise<any | null> {
-    try {
+      try {
       const result = await this.iosBackend.getSession(sessionId, userJwt);
-      if (!result?.success) return null;
-      return {
-        id: result.session.id,
-        userId: result.session.userId,
-        title: result.session.title,
-        isActive: result.session.isActive,
-        messageCount: result.session.messageCount,
-        createdAt: result.session.startedAt,
-      };
-    } catch (error) {
-      return null;
-    }
+        if (!result?.success) return null;
+        return {
+          id: result.session.id,
+          userId: result.session.userId,
+          title: result.session.title,
+          isActive: result.session.isActive,
+          messageCount: result.session.messageCount,
+          createdAt: result.session.startedAt,
+        };
+      } catch (error) {
+        return null;
+      }
   }
 
   /**
@@ -221,7 +221,8 @@ export class ChatRepositoryAdapter {
    */
   async getLastMessageForSession(sessionId: string, userId: string, userJwt?: string): Promise<any | null> {
     const result = await this.iosBackend.getLastMessage(sessionId, userJwt);
-    if (!result?.success) return null;
+    // Check both success flag AND that message exists (sessions can have 0 messages)
+    if (!result?.success || !result?.message) return null;
     return {
       id: result.message.id,
       sessionId: result.message.sessionId,

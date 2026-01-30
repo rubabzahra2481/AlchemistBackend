@@ -237,7 +237,7 @@ export class IOSBackendService implements OnModuleInit {
       return false;
     }
   }
-  
+
   /**
    * Get effective JWT - use passed token or fall back to dev token
    */
@@ -303,10 +303,10 @@ export class IOSBackendService implements OnModuleInit {
       // Handle 401 - token is invalid/expired
       if (response.status === 401) {
         console.error('❌ [IOSBackend] JWT token is invalid or expired');
-        throw new HttpException(
+          throw new HttpException(
           'JWT token is invalid or expired - user needs to re-login in iOS app',
           HttpStatus.UNAUTHORIZED,
-        );
+          );
       }
 
       if (!response.ok) {

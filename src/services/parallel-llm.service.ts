@@ -709,7 +709,7 @@ Output JSON only:
       // ALL messages go through the intelligent router (except obvious greetings handled above)
       // The intelligent router decides which frameworks to run based on understanding, not keywords
       let classification: any;
-      classification = await this.classifyMessage(message, history, selectedLLM, sessionId, userId);
+        classification = await this.classifyMessage(message, history, selectedLLM, sessionId, userId);
 
       // Safety override: If local check found crisis, ensure it's flagged
       if (safety.flag === 'risk') {
@@ -797,7 +797,7 @@ Output JSON only:
       results.forEach((result, index) => {
         const type = analysisTypes[index];
         if (result) {
-          newProfile[type] = result;
+        newProfile[type] = result;
         }
       });
       // attach safety flag
@@ -972,12 +972,12 @@ Output JSON only:
 
     return {
       flags: {
-        hasCrisisIndicators,
-        hasPersonalityIndicators,
-        hasEmotionalContent,
-        hasSelfWorthContent,
-        hasDarkTriadIndicators,
-        hasCognitiveIndicators,
+      hasCrisisIndicators,
+      hasPersonalityIndicators,
+      hasEmotionalContent,
+      hasSelfWorthContent,
+      hasDarkTriadIndicators,
+      hasCognitiveIndicators,
       },
       matchedKeywords: {
         crisis: matchedCrisis,
@@ -1007,10 +1007,10 @@ Output JSON only:
     // STAGE 1: Check for OBVIOUSLY non-psychological messages (saves LLM call)
     // =======================================================================
     const isObviouslyNoSignal = OBVIOUS_NO_SIGNAL_PATTERNS.some(pattern => pattern.test(trimmedMessage));
-    
+
     if (isObviouslyNoSignal) {
       console.log('[ROUTER] Message is obviously non-psychological - skipping LLM');
-      return {
+        return {
         hasCrisisIndicators: false,
         hasEmotionalContent: false,
         hasSelfWorthContent: false,
@@ -1018,8 +1018,8 @@ Output JSON only:
         hasPersonalityIndicators: false,
         hasCognitiveIndicators: false,
         urgency: 'low',
-      };
-    }
+        };
+      }
 
     // =======================================================================
     // STAGE 2: Use Intelligent LLM Router for everything else
@@ -1199,7 +1199,7 @@ If message shows self-doubt about ability (like "I'm not good enough"), mark dep
 
 {
   "depression": "normal/mild/moderate/severe/extremely_severe",
-  "anxiety": "normal/mild/moderate/severe/extremely_severe", 
+  "anxiety": "normal/mild/moderate/severe/extremely_severe",
   "stress": "normal/mild/moderate/severe/extremely_severe",
   "concerns": ["concern 1", "concern 2"],
   "requiresCrisisResponse": true/false,
