@@ -64,8 +64,13 @@ export class ChatController {
   @ApiOperation({ summary: 'Get conversation history for a session' })
   async getHistory(
     @Param('sessionId') sessionId: string,
+    @Query('userId') userId?: string,
+    @Headers('authorization') authHeader?: string,
   ) {
-    return await this.chatService.getSessionHistory(sessionId, ANONYMOUS_USER_ID);
+    const actualUserId = userId || ANONYMOUS_USER_ID;
+    const userJwt = extractJwtFromHeader(authHeader);
+    console.log(`📥 [ChatController] GET /chat/session/${sessionId}/history for userId: ${actualUserId}`);
+    return await this.chatService.getSessionHistory(sessionId, actualUserId, userJwt);
   }
 
   @Delete('session/:sessionId')
@@ -73,8 +78,13 @@ export class ChatController {
   @ApiResponse({ status: 200, description: 'Session deleted successfully' })
   async deleteSession(
     @Param('sessionId') sessionId: string,
+    @Query('userId') userId?: string,
+    @Headers('authorization') authHeader?: string,
   ) {
-    await this.chatService.clearSession(sessionId, ANONYMOUS_USER_ID);
+    const actualUserId = userId || ANONYMOUS_USER_ID;
+    const userJwt = extractJwtFromHeader(authHeader);
+    console.log(`📥 [ChatController] DELETE /chat/session/${sessionId} for userId: ${actualUserId}`);
+    await this.chatService.clearSession(sessionId, actualUserId, userJwt);
     return { message: 'Session deleted successfully' };
   }
 
@@ -86,7 +96,13 @@ export class ChatController {
   async renameSession(
     @Param('sessionId') sessionId: string,
     @Body() body: { title: string },
+    @Query('userId') userId?: string,
+    @Headers('authorization') authHeader?: string,
   ) {
+    const actualUserId = userId || ANONYMOUS_USER_ID;
+    const userJwt = extractJwtFromHeader(authHeader);
+    console.log(`📥 [ChatController] PATCH /chat/session/${sessionId} for userId: ${actualUserId}`);
+    
     try {
       // Validate input
       if (!body || !body.title || typeof body.title !== 'string') {
@@ -103,7 +119,7 @@ export class ChatController {
       }
       
       // Rename session
-      await this.chatService.renameSession(sessionId, ANONYMOUS_USER_ID, trimmedTitle);
+      await this.chatService.renameSession(sessionId, actualUserId, trimmedTitle, userJwt);
       return { message: 'Session renamed successfully' };
     } catch (error: any) {
       // Re-throw HttpException as-is
@@ -129,12 +145,17 @@ export class ChatController {
   }
 
   @Get('sessions')
-  @ApiOperation({ summary: 'Get all chat sessions' })
-  async getAllSessions() {
-    console.log('📥 [ChatController] GET /chat/sessions called');
+  @ApiOperation({ summary: 'Get all chat sessions for a user' })
+  async getAllSessions(
+    @Query('userId') userId?: string,
+    @Headers('authorization') authHeader?: string,
+  ) {
+    const actualUserId = userId || ANONYMOUS_USER_ID;
+    const userJwt = extractJwtFromHeader(authHeader);
+    console.log(`📥 [ChatController] GET /chat/sessions called for userId: ${actualUserId}`);
     try {
-      const sessions = await this.chatService.getAllSessions(ANONYMOUS_USER_ID);
-      console.log('✅ [ChatController] Returning sessions:', sessions?.length || 0);
+      const sessions = await this.chatService.getAllSessions(actualUserId, userJwt);
+      console.log(`✅ [ChatController] Returning ${sessions?.length || 0} sessions for user ${actualUserId}`);
       return sessions;
     } catch (error) {
       console.error('❌ [ChatController] Error getting sessions:', error);
