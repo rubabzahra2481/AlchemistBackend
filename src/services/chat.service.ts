@@ -174,11 +174,20 @@ export class ChatService {
 
       // 🧬 Get E-DNA profile for the user (cached, or fetch if not available)
       let ednaProfile: any = null;
+      console.log(`🧬 [ChatService] E-DNA Check: isEnabled=${this.ednaProfileService.isEnabled()}, userId=${userId}, hasJwt=${!!userJwt}`);
       if (this.ednaProfileService.isEnabled() && userId !== '00000000-0000-0000-0000-000000000000') {
-        ednaProfile = await this.ednaProfileService.getEdnaProfile(userId, false, userJwt);
-        if (ednaProfile) {
-          console.log(`🧬 [ChatService] Using E-DNA profile: ${ednaProfile.layers?.layer1?.coreType} - ${ednaProfile.layers?.layer2?.subtype}`);
+        try {
+          ednaProfile = await this.ednaProfileService.getEdnaProfile(userId, false, userJwt);
+          if (ednaProfile) {
+            console.log(`🧬 [ChatService] ✅ E-DNA profile LOADED: ${ednaProfile.layers?.layer1?.coreType} - ${ednaProfile.layers?.layer2?.subtype}`);
+          } else {
+            console.log(`🧬 [ChatService] ⚠️ E-DNA profile returned NULL for user ${userId}`);
+          }
+        } catch (ednaError: any) {
+          console.error(`🧬 [ChatService] ❌ E-DNA profile FAILED: ${ednaError?.message}`);
         }
+      } else {
+        console.log(`🧬 [ChatService] ⚠️ E-DNA SKIPPED: enabled=${this.ednaProfileService.isEnabled()}, isAnonymous=${userId === '00000000-0000-0000-0000-000000000000'}`);
       }
 
       // Generate personalized advice with cleaned profile, E-DNA profile, and short context

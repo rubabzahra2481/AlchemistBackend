@@ -34,8 +34,17 @@ export class AdviceGeneratorService {
     // We trust the LLM to respond appropriately when it sees these flags in the profile
     // Modern LLMs (GPT-4o, Claude, etc.) are trained on crisis response protocols
 
+    // DEBUG: Log what we received
+    console.log(`🤖 [AdviceGenerator] Generating advice:`);
+    console.log(`   - userId: ${userId}`);
+    console.log(`   - hasEdnaProfile: ${!!ednaProfile}`);
+    console.log(`   - ednaProfileType: ${ednaProfile?.layers?.layer1?.coreType || 'NONE'}`);
+    console.log(`   - conversationHistoryLength: ${conversationHistory.length}`);
+    console.log(`   - profileKeys: ${Object.keys(profile || {}).join(', ')}`);
+
     try {
       const systemPrompt = this.buildCleanSystemPrompt(profile, ednaProfile);
+      console.log(`🤖 [AdviceGenerator] System prompt length: ${systemPrompt.length} chars`);
 
       const reasoningMessages: any[] = [
         { role: 'system', content: systemPrompt },
