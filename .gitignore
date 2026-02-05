@@ -1,0 +1,60 @@
+# Compiled output
+/dist
+/node_modules
+*.js.map
+*.d.ts
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+reasoning.log
+
+# OS
+.DS_Store
+
+# Tests
+/coverage
+/.nyc_output
+test-*.json
+*-test-result.json
+test/
+/test
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Environment Variables (CRITICAL - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+.env.test
+.env.production
+*.env
+!.env.example
+
+# Docker
+docker-compose.override.yml
+
+# AWS Elastic Beanstalk extensions (commented out - not needed for now)
+.ebextensions
+
+
