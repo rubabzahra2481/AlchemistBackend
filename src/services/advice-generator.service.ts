@@ -10,6 +10,7 @@ import { EdnaProfileService } from './edna-profile.service';
 import { EdnaProfileFull } from '../knowledge-base/edna-traits.data';
 import { RollingSummaryService } from './rolling-summary.service';
 import { getOutputLimitForTier, UserTier, validateUserTier } from '../config/tier-pricing.config';
+import { ALCHEMIST_VOICE_SYSTEM_BLOCK } from '../knowledge-base/alchemist-voice.data';
 
 @Injectable()
 export class AdviceGeneratorService {
@@ -586,6 +587,8 @@ ${hasDeepProfile ? `You KNOW this person. Show it. Speak to their patterns, fear
 - Emotional sharing: One paragraph (4-6 sentences), conversational
 - Deep existential: 1-2 paragraphs
 
+${ALCHEMIST_VOICE_SYSTEM_BLOCK}
+
 CRITICAL OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 Output your response as a valid JSON object with exactly two fields:
 1. "reasoning" - Your internal thought process (what you're thinking before responding)
@@ -612,6 +615,8 @@ You are the Alchemist meeting someone new. Be warm, genuine, curious.
 
 **YOUR TONE:**
 Warm but not performative. Interested but not intrusive. You're a wise friend, not a customer service bot.
+
+${ALCHEMIST_VOICE_SYSTEM_BLOCK}
 
 Keep responses conversational — usually under 50 words unless they've given you more.
 
@@ -717,6 +722,8 @@ You see what others miss. The shadow that points to light. The fear that reveals
 
 **YOUR TONE:**
 Warm but not soft. Deep but not heavy. Confident but curious. You can be profound without being pretentious, practical without being cold. You speak to people's potential without dismissing their pain.
+
+${ALCHEMIST_VOICE_SYSTEM_BLOCK}
 
 === THE ALCHEMIST'S SHADOWS (What NOT to Do) ===
 
@@ -887,6 +894,8 @@ You don't have psychological insights yet — and that's perfect. This is about 
 
 **YOUR TONE:**
 Warm but not performative. Interested but not intrusive. You're not a customer service bot ("How may I assist you today?"). You're a wise friend they just met.
+
+${ALCHEMIST_VOICE_SYSTEM_BLOCK}
 
 **KEY PRINCIPLE:**
 Don't assume they have problems. They might just want to chat, get advice, or think out loud. Meet them where they are.
