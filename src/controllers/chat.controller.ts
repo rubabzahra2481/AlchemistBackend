@@ -52,6 +52,8 @@ export class ChatController {
     const userId = chatRequest.userId || ANONYMOUS_USER_ID;
     // Extract JWT from header for production use
     const userJwt = extractJwtFromHeader(authHeader);
+    // Decision Intelligence mode: always ON for all messages (client requirement)
+    const decisionIntelligenceMode = true;
 
     // Debug: FULL request logging
     console.log(`\n🚀🚀🚀 [ChatController] INCOMING REQUEST`);
@@ -79,6 +81,7 @@ export class ChatController {
           selectedLLM,
           userId,
           userJwt,
+          decisionIntelligenceMode,
         )) {
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
           if (typeof (res as any).flush === 'function') {
@@ -102,6 +105,7 @@ export class ChatController {
         selectedLLM,
         userId,
         userJwt,
+        decisionIntelligenceMode,
       );
       res.json(result);
     } catch (error: any) {
@@ -120,6 +124,8 @@ export class ChatController {
     const selectedLLM = chatRequest.selectedLLM || DEFAULT_LLM;
     const userId = chatRequest.userId || ANONYMOUS_USER_ID;
     const userJwt = extractJwtFromHeader(authHeader);
+    // Decision Intelligence mode: always ON for all messages (client requirement)
+    const decisionIntelligenceMode = true;
 
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
@@ -140,6 +146,7 @@ export class ChatController {
         selectedLLM,
         userId,
         userJwt,
+        decisionIntelligenceMode,
       )) {
         // Send SSE formatted data and flush immediately
         const data = `data: ${JSON.stringify(chunk)}\n\n`;

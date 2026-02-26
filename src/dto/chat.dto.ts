@@ -26,6 +26,9 @@ export class ChatRequestDto {
 
   @IsOptional()
   stream?: boolean;  // Enable streaming response via SSE
+
+  @IsOptional()
+  decisionIntelligenceMode?: boolean;  // Use Decision Intelligence Agent flow (workbook-guided decision making)
 }
 
 export class ChatResponseDto {

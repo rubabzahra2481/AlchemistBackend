@@ -11,6 +11,10 @@ import { EdnaProfileFull } from '../knowledge-base/edna-traits.data';
 import { RollingSummaryService } from './rolling-summary.service';
 import { getOutputLimitForTier, UserTier, validateUserTier } from '../config/tier-pricing.config';
 import { ALCHEMIST_VOICE_SYSTEM_BLOCK } from '../knowledge-base/alchemist-voice.data';
+import {
+  getDecisionIntelligenceSystemPrompt,
+  type DecisionCoreType,
+} from '../knowledge-base/decision-intelligence-agent.prompt';
 
 @Injectable()
 export class AdviceGeneratorService {
@@ -35,6 +39,7 @@ export class AdviceGeneratorService {
     userId?: string,
     ednaProfile?: EdnaProfileFull | null,
     userTier: string = 'free', // NEW: tier for history limits
+    decisionIntelligenceMode?: boolean,
   ): Promise<{ response: string; reasoning?: string }> {
     // Note: Crisis detection happens in parallel-llm.service.ts (safety gate)
     // The crisis indicators are stored in profile.safety and profile.dass.requiresCrisisResponse
@@ -49,12 +54,17 @@ export class AdviceGeneratorService {
     console.log(`   - conversationHistoryLength: ${conversationHistory.length}`);
     console.log(`   - profileKeys: ${Object.keys(profile || {}).join(', ')}`);
     console.log(`   - userTier: ${userTier}`);
+    console.log(`   - decisionIntelligenceMode: ${!!decisionIntelligenceMode}`);
 
     try {
-      const systemPrompt = this.buildCleanSystemPrompt(profile, ednaProfile);
-      console.log(`🤖 [AdviceGenerator] System prompt length: ${systemPrompt.length} chars`);
+      const systemPrompt = decisionIntelligenceMode
+        ? this.buildDecisionIntelligenceSystemPrompt(ednaProfile)
+        : this.buildCleanSystemPrompt(profile, ednaProfile);
+      console.log(`🤖 [AdviceGenerator] System prompt length: ${systemPrompt.length} chars (DI: ${!!decisionIntelligenceMode})`);
 
-      const userMessagePrompt = this.buildUserMessagePrompt(userMessage, profile);
+      const userMessagePrompt = decisionIntelligenceMode
+        ? userMessage
+        : this.buildUserMessagePrompt(userMessage, profile);
       
       // ROLLING SUMMARY: Use optimized history instead of full history
       // This prevents cost explosion on long conversations
@@ -249,15 +259,17 @@ export class AdviceGeneratorService {
     userId?: string,
     ednaProfile?: EdnaProfileFull | null,
     userTier: string = 'free',
+    decisionIntelligenceMode?: boolean,
   ): AsyncGenerator<{ type: 'token' | 'reasoning' | 'done'; content: string }, void, unknown> {
     try {
-      // Use the EXACT SAME perfect prompt as non-streaming
-      const systemPrompt = this.buildCleanSystemPrompt(profile, ednaProfile);
-      const userMessagePrompt = this.buildUserMessagePrompt(userMessage, profile);
+      const systemPrompt = decisionIntelligenceMode
+        ? this.buildDecisionIntelligenceSystemPrompt(ednaProfile)
+        : this.buildCleanSystemPrompt(profile, ednaProfile);
+      const userMessagePrompt = decisionIntelligenceMode ? userMessage : this.buildUserMessagePrompt(userMessage, profile);
 
       console.log(`\n🔥🔥🔥 [AdviceGenerator STREAM V2] CALLED`);
       console.log(`   - userMessage: ${userMessage?.substring(0, 50)}...`);
-      console.log(`   - systemPrompt length: ${systemPrompt.length} chars`);
+      console.log(`   - systemPrompt length: ${systemPrompt.length} chars (DI: ${!!decisionIntelligenceMode})`);
       console.log(`   - hasEdnaProfile: ${!!ednaProfile}`);
       console.log(`   - userTier: ${userTier}`);
 
@@ -383,12 +395,14 @@ export class AdviceGeneratorService {
     userId?: string,
     ednaProfile?: EdnaProfileFull | null,
     userTier: string = 'free', // NEW: tier for history limits
+    decisionIntelligenceMode?: boolean,
   ): AsyncGenerator<{ type: 'token' | 'reasoning' | 'done'; content: string }, void, unknown> {
     try {
-      // Use the SAME perfect prompt as non-streaming (10/10 ALCHEMIST PROMPT)
-      const systemPrompt = this.buildCleanSystemPrompt(profile, ednaProfile);
-      const userMessagePrompt = this.buildUserMessagePrompt(userMessage, profile);
-      
+      const systemPrompt = decisionIntelligenceMode
+        ? this.buildDecisionIntelligenceSystemPrompt(ednaProfile)
+        : this.buildCleanSystemPrompt(profile, ednaProfile);
+      const userMessagePrompt = decisionIntelligenceMode ? userMessage : this.buildUserMessagePrompt(userMessage, profile);
+
       // ROLLING SUMMARY: Use optimized history instead of full history
       const { summary, recentMessages } = await this.rollingSummaryService.getOptimizedHistory(
         sessionId || 'default',
@@ -630,6 +644,21 @@ CRITICAL OUTPUT FORMAT:
 Example of WRONG output: {"response": "Hello!"}
 Example of CORRECT output: Hello! What brings you here today?`;
     }
+  }
+
+  /**
+   * Build system prompt for Decision Intelligence Agent mode (workbook-guided decision making).
+   * Uses core type from E-DNA to inject the correct type block; defaults to 'mixed' if no profile.
+   */
+  private buildDecisionIntelligenceSystemPrompt(ednaProfile?: EdnaProfileFull | null): string {
+    const raw = ednaProfile?.layers?.layer1?.coreType?.toLowerCase() || 'mixed';
+    const coreType: DecisionCoreType =
+      raw === 'architect' || raw === 'alchemist' ? raw : 'mixed';
+    const subtype = ednaProfile?.layers?.layer2?.subtype;
+    const identityLabel = subtype
+      ? `${coreType.charAt(0).toUpperCase() + coreType.slice(1)} — ${subtype}`
+      : coreType.charAt(0).toUpperCase() + coreType.slice(1);
+    return getDecisionIntelligenceSystemPrompt(coreType, { identityLabel });
   }
 
   /**

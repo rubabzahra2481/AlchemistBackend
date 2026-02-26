@@ -69,6 +69,7 @@ export class ChatService {
     selectedLLM: string = 'gpt-4o',
     userId: string = '00000000-0000-0000-0000-000000000000', // Default anonymous UUID
     userJwt?: string, // JWT from iOS app
+    decisionIntelligenceMode?: boolean,
   ): Promise<ChatResponseDto> {
     try {
 
@@ -235,6 +236,7 @@ export class ChatService {
         userId,
         ednaProfile, // 🧬 Pass E-DNA profile for personalization
         userTier, // 📝 Pass tier for rolling summary history limits (extracted from Munawar's backend)
+        decisionIntelligenceMode,
       );
 
       // Generate context-aware recommendations
@@ -333,6 +335,7 @@ export class ChatService {
     selectedLLM: string = 'gpt-4o',
     userId: string = '00000000-0000-0000-0000-000000000000',
     userJwt?: string,
+    decisionIntelligenceMode?: boolean,
   ): AsyncGenerator<{ type: string; data: any }, void, unknown> {
     console.log(`\n🔥🔥🔥 [ChatService.processMessageWithStreaming] CALLED`);
     console.log(`📝 Message: ${message?.substring(0, 50)}...`);
@@ -453,6 +456,7 @@ export class ChatService {
         userId,
         ednaProfile,
         userTier,
+        decisionIntelligenceMode,
       )) {
         if (chunk.type === 'token') {
           fullResponse += chunk.content;
@@ -1410,6 +1414,7 @@ export class ChatService {
     selectedLLM: string = 'gpt-4o',
     userId: string = '00000000-0000-0000-0000-000000000000',
     userJwt?: string,
+    decisionIntelligenceMode?: boolean,
   ): AsyncGenerator<{ type: string; data: any }, void, unknown> {
     try {
       // ✅ Get or create session in database
@@ -1547,6 +1552,7 @@ export class ChatService {
         userId,
         ednaProfile,
         userTier, // 📝 Pass tier for rolling summary history limits (extracted from Munawar's backend)
+        decisionIntelligenceMode,
       )) {
         if (chunk.type === 'token') {
           fullResponse += chunk.content;
