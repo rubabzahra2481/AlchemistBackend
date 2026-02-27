@@ -180,6 +180,17 @@ export class AdviceGeneratorService {
 
       let fullResponse = llmResponse.content || "I'm here to listen. What's on your mind?";
 
+      // DEBUG: Decision Intelligence — check if end validator made it into the response
+      if (decisionIntelligenceMode) {
+        const hasEndValidator =
+          /3\.\s*Logic\s*\(end validator\)/i.test(fullResponse) ||
+          /3\.\s*Emotion\s*\(end validator\)/i.test(fullResponse) ||
+          fullResponse.includes('end validator');
+        console.log(`🔬 [DI DEBUG] Raw LLM response length: ${fullResponse.length}`);
+        console.log(`🔬 [DI DEBUG] Contains end validator: ${hasEndValidator}`);
+        console.log(`🔬 [DI DEBUG] Response snippet (first 600 chars): ${fullResponse.slice(0, 600).replace(/\n/g, ' ')}`);
+      }
+
       // Parse JSON response
       let cleanResponse = '';
       let extractedReasoning = '';
@@ -223,6 +234,12 @@ export class AdviceGeneratorService {
           cleanResponse = fullResponse.trim();
           extractedReasoning = 'LLM did not follow the expected format - reasoning unavailable';
         }
+      }
+
+      // Decision Intelligence: ensure end-validator third point is present (safety net if LLM skipped it)
+      if (decisionIntelligenceMode && cleanResponse) {
+        const coreType = this.getDecisionCoreType(ednaProfile);
+        cleanResponse = this.ensureEndValidatorInResponse(cleanResponse, coreType);
       }
 
       // Note: Don't strip ** markdown as frontend renders it as bold
@@ -368,6 +385,20 @@ export class AdviceGeneratorService {
         const responseMatch = fullResponse.match(/"response"\s*:\s*"([\s\S]*?)"\s*}/);
         if (reasoningMatch) finalReasoning = reasoningMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
         if (responseMatch) finalResponse = responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      }
+
+      // DEBUG: Decision Intelligence — check if end validator in streamed response
+      if (decisionIntelligenceMode) {
+        const textToCheck = finalResponse || fullResponse;
+        const hasEndValidator =
+          /3\.\s*Logic\s*\(end validator\)/i.test(textToCheck) ||
+          /3\.\s*Emotion\s*\(end validator\)/i.test(textToCheck) ||
+          textToCheck.includes('end validator');
+        console.log(`🔬 [DI STREAM DEBUG] Response length: ${textToCheck.length}, contains end validator: ${hasEndValidator}`);
+        console.log(`🔬 [DI STREAM DEBUG] Response snippet: ${textToCheck.slice(0, 500).replace(/\n/g, ' ')}`);
+        // Safety net: inject end validator if missing
+        const coreType = this.getDecisionCoreType(ednaProfile);
+        finalResponse = this.ensureEndValidatorInResponse(finalResponse || fullResponse, coreType);
       }
 
       // Yield final reasoning if we got more
@@ -647,18 +678,98 @@ Example of CORRECT output: Hello! What brings you here today?`;
   }
 
   /**
+   * Get Decision Intelligence core type from E-DNA profile.
+   */
+  private getDecisionCoreType(ednaProfile?: EdnaProfileFull | null): DecisionCoreType {
+    const raw = ednaProfile?.layers?.layer1?.coreType?.toLowerCase() || 'mixed';
+    return raw === 'architect' || raw === 'alchemist' ? raw : 'mixed';
+  }
+
+  /**
+   * If the response looks like a summary (has 1. and 2.) but is missing the end-validator third point,
+   * inject it so the client always sees the full decision loop.
+   */
+  private ensureEndValidatorInResponse(responseText: string, coreType: DecisionCoreType): string {
+    // Only skip if we already have correctly numbered "3. Logic (end validator)" or "3. Emotion (end validator)"
+    const hasCorrectEndValidator =
+      /3\.\s*Logic\s*\(end validator\)/i.test(responseText) ||
+      /3\.\s*Emotion\s*\(end validator\)/i.test(responseText) ||
+      /3\.\s*\[?Dominant validator\]?/i.test(responseText);
+    if (hasCorrectEndValidator) return responseText;
+
+    // Remove wrongly numbered "1. Logic (end validator)" / "1. Emotion (end validator)" (allow ** before 1.)
+    let text = responseText
+      .replace(/\n\s*(\*\*)?1\.\s*(\*\*)?Logic\s*\(end validator\)(\*\*)?\s*:?[^\n]*/gi, '\n')
+      .replace(/\n\s*(\*\*)?1\.\s*(\*\*)?Emotion\s*\(end validator\)(\*\*)?\s*:?[^\n]*/gi, '\n')
+      .replace(/\n\s*(\*\*)?1\.\s*(\*\*)?\[?Dominant validator\]?(\*\*)?\s*:?[^\n]*/gi, '\n');
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+
+    // Fallback: fix number in place if a "1. Logic (end validator)" line somehow remains (e.g. different formatting)
+    text = text
+      .replace(/1\.\s*Logic\s*\(end validator\)/gi, '3. Logic (end validator)')
+      .replace(/1\.\s*Emotion\s*\(end validator\)/gi, '3. Emotion (end validator)');
+
+    // Match "1. Logic" or "1. **Logic:**" and "2. Emotion" or "2. **Emotion:**" (allow markdown)
+    const hasLogicThenEmotion = /1\.\s*(\*\*)?Logic(\*\*)?\s*:?/i.test(text) && /2\.\s*(\*\*)?Emotion(\*\*)?\s*:?/i.test(text);
+    const hasEmotionThenLogic = /1\.\s*(\*\*)?Emotion(\*\*)?\s*:?/i.test(text) && /2\.\s*(\*\*)?Logic(\*\*)?\s*:?/i.test(text);
+    if (!hasLogicThenEmotion && !hasEmotionThenLogic) return responseText;
+
+    // Third point text — appears as 3. in the list (Architect: Logic, Alchemist: Emotion, Mixed: Dominant)
+    const thirdPoint =
+      coreType === 'architect'
+        ? '3. Logic (end validator): Given the logic and emotion you shared, what does your logic conclude now?'
+        : coreType === 'alchemist'
+          ? '3. Emotion (end validator): Given the logic and emotion you shared, what does your gut say now?'
+          : '3. Dominant validator: What do you trust more right now—logic or emotion—and what does it tell you?';
+    const summaryLine = 'In summary: logic, emotion, and your end validator point to what you need to decide.';
+
+    // Insert the 3rd point immediately after the "2. Emotion" (or "2. Logic") paragraph so it is the literal third point
+    const beforeInsert = text;
+    if (hasLogicThenEmotion) {
+      text = text.replace(
+        /(2\.\s*(\*\*)?Emotion(\*\*)?\s*:?[^\n]*(?:\n(?!\n)[^\n]*)*)(\n\n)/i,
+        `$1\n\n${thirdPoint}$4`,
+      );
+    } else if (hasEmotionThenLogic) {
+      text = text.replace(
+        /(2\.\s*(\*\*)?Logic(\*\*)?\s*:?[^\n]*(?:\n(?!\n)[^\n]*)*)(\n\n)/i,
+        `$1\n\n${thirdPoint}$4`,
+      );
+    }
+    // Fallback: if paragraph pattern didn't match, insert before decision step
+    if (text === beforeInsert) {
+      const decisionStepPattern = /(?:Now,?\s+)?(?:[Tt]his (?:is the |leads us to the )?[Dd]ecision step|[Dd]ecision step)\s*:?|(?:Now,?\s*)?(?:let's\s+)?(?:focus on the\s+|get to the\s+|finalize your\s+)?[Dd]ecision step\s*:?|(?:Now,? )?[Dd]o you (?:have|feel) enough|(?:Now,?\s*)?[Ll]et's (?:focus on making a decision|finalize this|finalize your decision)\s*:?/i;
+      const match = text.match(decisionStepPattern);
+      if (match) {
+        text = text.replace(decisionStepPattern, `\n\n${thirdPoint}\n\n${summaryLine}\n\n$&`);
+      } else {
+        text = text.trimEnd() + `\n\n${thirdPoint}\n\n${summaryLine}\n\n`;
+      }
+    } else {
+      // Summary line before the decision step
+      const decisionStepPattern = /(?:Now,?\s+)?(?:[Tt]his (?:is the |leads us to the )?[Dd]ecision step|[Dd]ecision step)\s*:?|(?:Now,?\s*)?(?:let's\s+)?(?:focus on the\s+|get to the\s+|finalize your\s+)?[Dd]ecision step\s*:?|(?:Now,? )?[Dd]o you (?:have|feel) enough|(?:Now,?\s*)?[Ll]et's (?:focus on making a decision|finalize this|finalize your decision)\s*:?/i;
+      if (text.match(decisionStepPattern) && !text.includes(summaryLine)) {
+        text = text.replace(decisionStepPattern, `\n\n${summaryLine}\n\n$&`);
+      }
+    }
+
+    return text;
+  }
+
+  /**
    * Build system prompt for Decision Intelligence Agent mode (workbook-guided decision making).
    * Uses core type from E-DNA to inject the correct type block; defaults to 'mixed' if no profile.
    */
   private buildDecisionIntelligenceSystemPrompt(ednaProfile?: EdnaProfileFull | null): string {
-    const raw = ednaProfile?.layers?.layer1?.coreType?.toLowerCase() || 'mixed';
-    const coreType: DecisionCoreType =
-      raw === 'architect' || raw === 'alchemist' ? raw : 'mixed';
+    const coreType = this.getDecisionCoreType(ednaProfile);
     const subtype = ednaProfile?.layers?.layer2?.subtype;
     const identityLabel = subtype
       ? `${coreType.charAt(0).toUpperCase() + coreType.slice(1)} — ${subtype}`
       : coreType.charAt(0).toUpperCase() + coreType.slice(1);
-    return getDecisionIntelligenceSystemPrompt(coreType, { identityLabel });
+    const prompt = getDecisionIntelligenceSystemPrompt(coreType, { identityLabel });
+    const hasCritical = prompt.includes('CRITICAL') && prompt.includes('end validator');
+    console.log(`🔬 [DI DEBUG] coreType: ${coreType}, prompt has CRITICAL+end validator: ${hasCritical}, length: ${prompt.length}`);
+    return prompt;
   }
 
   /**
