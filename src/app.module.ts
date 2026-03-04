@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './controllers/app.controller';
 import { ChatController } from './controllers/chat.controller';
+import { CreditsController } from './controllers/credits.controller';
 import { ChatService } from './services/chat.service';
 import { PersonalityAnalyzerService } from './services/personality-analyzer.service';
 import { AdviceGeneratorService } from './services/advice-generator.service';
@@ -39,7 +40,7 @@ import { UsageStoreService } from './services/usage-store.service';
     }),
     // NO DatabaseModule - all data goes to Munawar's backend
   ],
-  controllers: [AppController, ChatController],
+  controllers: [AppController, ChatController, CreditsController],
   providers: [
     ChatService,
     PersonalityAnalyzerService,

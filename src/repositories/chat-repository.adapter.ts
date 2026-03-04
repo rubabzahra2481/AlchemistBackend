@@ -2,11 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IOSBackendService } from '../services/ios-backend.service';
 
-/** Credit snapshot for iOS: stored in message metadata (Munawar agent_messages.metadata JSONB). */
+/** Credit snapshot for iOS: stored in message metadata (Munawar agent_messages.metadata JSONB). 1 credit = 1000 tokens. */
 export interface CreditsSnapshot {
   allowed: boolean;
   tokensUsed: number;
   tokensIncluded: number;
+  creditsUsed: number;
+  creditsIncluded: number;
+  /** Base monthly allowance (resets each month). */
+  baseAllowance?: number;
+  /** Top-up carried from previous month (unused). */
+  topUpCarried?: number;
+  /** Top-up purchased this month. */
+  topUpAddedThisMonth?: number;
   usagePercentage: number;
   warning: boolean;
   message: string | null;

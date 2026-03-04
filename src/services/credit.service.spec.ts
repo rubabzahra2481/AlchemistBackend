@@ -14,9 +14,10 @@ describe('CreditService', () => {
   const userId = 'test-user-123';
 
   beforeEach(async () => {
+    const store: Record<string, any> = {};
     const mockUsageStore = {
-      getCreditRecord: jest.fn().mockReturnValue(undefined),
-      setCreditRecord: jest.fn(),
+      getCreditRecord: jest.fn((key: string) => store[key]),
+      setCreditRecord: jest.fn((key: string, value: any) => { store[key] = value; }),
     };
     const mockConfig = {
       get: jest.fn().mockImplementation((key: string) => (key === 'USE_IOS_BACKEND' ? 'true' : undefined)),
@@ -60,29 +61,29 @@ describe('CreditService', () => {
     iosBackend = module.get(IOSBackendService) as jest.Mocked<IOSBackendService>;
   });
 
-  it('should return credit check with tokens from local store when record exists', async () => {
-    (usageStore.getCreditRecord as jest.Mock).mockReturnValue({
-      userId,
-      month: '2025-02',
-      tokensUsed: 10_000,
-      requestCount: 5,
-    });
+  it('should return credit check with credits from local store when record exists', async () => {
+    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const key = `${userId}:${currentMonth}`;
+    (usageStore.setCreditRecord as jest.Mock)(key, { userId, month: currentMonth, creditsUsed: 10, requestCount: 5 });
     const result = await service.checkCredits(userId, 'free');
+    expect(result.creditsUsed).toBe(10);
+    expect(result.creditsIncluded).toBe(100);
     expect(result.tokensUsed).toBe(10_000);
     expect(result.tokensIncluded).toBe(100_000);
     expect(iosBackend.getUserSessions).not.toHaveBeenCalled();
   });
 
   it('should read-back from Munawar when local store is empty and USE_IOS_BACKEND=true', async () => {
-    (usageStore.getCreditRecord as jest.Mock).mockReturnValue(undefined);
     const result = await service.checkCredits(userId, 'free');
     expect(iosBackend.getUserSessions).toHaveBeenCalledWith(userId, undefined, 10);
     expect(iosBackend.getSessionMessages).toHaveBeenCalledWith('session-1', 50);
+    expect(result.creditsUsed).toBe(25);
+    expect(result.creditsIncluded).toBe(100);
     expect(result.tokensUsed).toBe(25_000);
     expect(result.tokensIncluded).toBe(100_000);
     expect(usageStore.setCreditRecord).toHaveBeenCalledWith(
       expect.stringContaining(userId),
-      expect.objectContaining({ userId, tokensUsed: 25_000, requestCount: 0 }),
+      expect.objectContaining({ userId, creditsUsed: 25, requestCount: 0, topUpCarried: 0, topUpAddedThisMonth: 0 }),
     );
   });
 
@@ -90,16 +91,33 @@ describe('CreditService', () => {
     (configService.get as jest.Mock).mockImplementation((key: string) =>
       key === 'USE_IOS_BACKEND' ? 'false' : undefined,
     );
-    (usageStore.getCreditRecord as jest.Mock).mockReturnValue(undefined);
     const result = await service.checkCredits(userId, 'free');
     expect(iosBackend.getUserSessions).not.toHaveBeenCalled();
     expect(result.tokensUsed).toBe(0);
   });
 
   it('getUsageStats should reflect read-back when local store is empty', async () => {
-    (usageStore.getCreditRecord as jest.Mock).mockReturnValue(undefined);
     const result = await service.getUsageStats(userId, 'free');
+    expect(result.creditsUsed).toBe(25);
+    expect(result.creditsIncluded).toBe(100);
     expect(result.tokensUsed).toBe(25_000);
     expect(result.tokensIncluded).toBe(100_000);
+  });
+
+  it('addTopUp should add credits and persist topUpCredits; checkCredits uses effective allowance', async () => {
+    const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const key = `${userId}:${currentMonth}`;
+    (usageStore.setCreditRecord as jest.Mock)(key, { userId, month: currentMonth, creditsUsed: 80, requestCount: 10 });
+    const added = await service.addTopUp(userId, 50);
+    expect(added.creditsAdded).toBe(50);
+    expect(added.totalTopUpThisMonth).toBe(50);
+    expect(usageStore.setCreditRecord).toHaveBeenCalledWith(
+      expect.stringContaining(userId),
+      expect.objectContaining({ creditsUsed: 80, requestCount: 10, topUpCredits: 50, topUpCarried: 0, topUpAddedThisMonth: 50 }),
+    );
+    const check = await service.checkCredits(userId, 'free');
+    expect(check.creditsIncluded).toBe(150);
+    expect(check.creditsUsed).toBe(80);
+    expect(check.allowed).toBe(true);
   });
 });

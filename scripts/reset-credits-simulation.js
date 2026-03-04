@@ -31,11 +31,12 @@ const month = getCurrentMonth();
 const key = `${TEST_USER_ID}:${month}`;
 
 if (key in data) {
-  data[key] = { ...data[key], tokensUsed: 0, requestCount: 0 };
+  const rec = data[key];
+  data[key] = { userId: rec.userId, month: rec.month, creditsUsed: 0, requestCount: 0 };
   fs.writeFileSync(CREDIT_FILE, JSON.stringify(data, null, 2), 'utf-8');
   console.log('Credits reset for test user.');
   console.log('  User:', TEST_USER_ID);
-  console.log('  tokensUsed set to 0');
+  console.log('  creditsUsed set to 0');
   console.log('');
   console.log('Refresh the frontend — you can send messages again.');
 } else {

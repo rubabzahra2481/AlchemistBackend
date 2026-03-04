@@ -1,10 +1,10 @@
 /**
- * Set credit usage to a specific amount for testing (e.g. 20,000 used of 1M for Standard).
+ * Set credit usage to a specific amount for testing. 1 credit = 1000 tokens.
  * Uses the CURRENT month key so the backend will read it.
  *
  * Run from backend folder:
- *   node scripts/set-credits-amount.js 20000     # 20k used (any tier)
- *   node scripts/set-credits-amount.js 200000    # 200k used
+ *   node scripts/set-credits-amount.js 20     # 20 credits used (any tier)
+ *   node scripts/set-credits-amount.js 85.5   # 85.5 credits (decimals ok)
  *
  * Then set TIER_OVERRIDE=standard (or the tier you want) in .env and restart backend.
  * To reset to 0: node scripts/reset-credits-simulation.js
@@ -22,10 +22,10 @@ function getCurrentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-const amount = parseInt(process.argv[2], 10);
+const amount = parseFloat(process.argv[2]);
 if (isNaN(amount) || amount < 0) {
-  console.log('Usage: node scripts/set-credits-amount.js <tokensUsed>');
-  console.log('Example: node scripts/set-credits-amount.js 20000');
+  console.log('Usage: node scripts/set-credits-amount.js <credits>');
+  console.log('Example: node scripts/set-credits-amount.js 20   (1 credit = 1000 tokens)');
   process.exit(1);
 }
 
@@ -43,7 +43,7 @@ const key = `${TEST_USER_ID}:${month}`;
 data[key] = {
   userId: TEST_USER_ID,
   month,
-  tokensUsed: amount,
+  creditsUsed: amount,
   requestCount: 0,
 };
 
@@ -55,7 +55,7 @@ fs.writeFileSync(CREDIT_FILE, JSON.stringify(data, null, 2), 'utf-8');
 console.log('Credits set for test user.');
 console.log('  User:', TEST_USER_ID);
 console.log('  Month (current):', month);
-console.log('  tokensUsed:', amount.toLocaleString());
+console.log('  creditsUsed:', amount, '(1 credit = 1000 tokens)');
 console.log('');
-console.log('Refresh the app — the UI should show', amount.toLocaleString(), '/ tier allowance.');
+console.log('Refresh the app — the UI should show', amount, '/ tier allowance (credits).');
 console.log('To reset: node scripts/reset-credits-simulation.js');
