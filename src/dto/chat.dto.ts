@@ -4,7 +4,7 @@ import { Transform } from 'class-transformer';
 export class ChatRequestDto {
   @IsString()
   @IsNotEmpty()
-  @Length(1, 2000, { message: 'Message must be between 1 and 2000 characters' })
+  @Length(1, 500000, { message: 'Message must be between 1 and 500,000 characters. Tier word limits are enforced separately.' })
   @Transform(({ value }) => value?.trim()) // Trim whitespace
   @Matches(/^(?!\s*$).+/, { message: 'Message cannot be only whitespace' }) // No whitespace-only
   message: string;

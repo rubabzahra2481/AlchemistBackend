@@ -62,8 +62,13 @@ export class CreditService {
     private iosBackend: IOSBackendService,
   ) {}
 
+  /** Normalize userId so credits are consistent whether client sends uppercase or lowercase (e.g. UUID). */
+  private normalizeUserId(userId: string): string {
+    return typeof userId === 'string' ? userId.trim().toLowerCase() : String(userId || '').trim().toLowerCase();
+  }
+
   private getUsageKey(userId: string, month: string): string {
-    return `${userId}:${month}`;
+    return `${this.normalizeUserId(userId)}:${month}`;
   }
 
   private getCurrentMonth(): string {
