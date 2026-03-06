@@ -80,6 +80,12 @@ export class ChatRepositoryAdapter {
   /**
    * Save a user message
    */
+  /** Ensure content is non-empty so iOS backend does not return 400 "Content is required". */
+  private ensureContent(content: string | undefined | null, fallback: string): string {
+    const s = typeof content === 'string' ? content.trim() : '';
+    return s.length > 0 ? s : fallback;
+  }
+
   async saveUserMessage(
     sessionId: string,
     userId: string,
@@ -87,7 +93,8 @@ export class ChatRepositoryAdapter {
     sequenceNumber: number,
     userJwt?: string,
   ): Promise<any> {
-      const result = await this.iosBackend.createMessage(sessionId, 'user', content, {
+      const safeContent = this.ensureContent(content, '(No message content)');
+      const result = await this.iosBackend.createMessage(sessionId, 'user', safeContent, {
         sequenceNumber,
     }, userJwt);
       return {
@@ -128,7 +135,8 @@ export class ChatRepositoryAdapter {
       if (creditsSnapshot) {
         metadata.credits = creditsSnapshot;
       }
-      const result = await this.iosBackend.createMessage(sessionId, 'agent', content, metadata, userJwt);
+      const safeContent = this.ensureContent(content, '(Response unavailable. Please try again.)');
+      const result = await this.iosBackend.createMessage(sessionId, 'agent', safeContent, metadata, userJwt);
       return {
         id: result.message.id,
         sessionId: result.message.sessionId,

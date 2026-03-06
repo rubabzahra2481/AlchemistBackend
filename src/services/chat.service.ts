@@ -72,6 +72,8 @@ export class ChatService {
     userJwt?: string, // JWT from iOS app
     decisionIntelligenceMode?: boolean,
   ): Promise<ChatResponseDto> {
+    let fallbackSessionId: string | null = null;
+    let fallbackAssistantSeq: number | null = null;
     try {
 
       // ✅ Get or create session in database
@@ -93,6 +95,8 @@ export class ChatService {
 
       // ✅ Save user message to database
       await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber, userJwt);
+      fallbackSessionId = actualSessionId;
+      fallbackAssistantSeq = nextSequenceNumber + 1;
 
       // ✅ Build history array for analysis (from existing messages + new message)
       // Ensure all timestamps are valid Date objects for ConversationMessage interface
@@ -340,11 +344,33 @@ export class ChatService {
         throw error;
       }
 
-      // Return a fallback response for other errors
+      // Save fallback assistant message so Munawar's DB has a reply (avoids "agent not giving an answer" on iOS)
+      const fallbackResponse = "I'm here to help! Something went wrong on my side. Please try again.";
+      if (fallbackSessionId && fallbackAssistantSeq !== null) {
+        try {
+          await this.chatRepository.saveAssistantMessage(
+            fallbackSessionId,
+            userId,
+            fallbackResponse,
+            fallbackAssistantSeq,
+            selectedLLM,
+            `Error: ${error instanceof Error ? error.message : String(error)}`,
+            { overallInsights: 'New conversation', dominantQuotients: [], needsAttention: [], conversationContext: 'Error recovery' },
+            [],
+            {},
+            undefined,
+            userJwt,
+            { allowed: true, tokensUsed: 0, tokensIncluded: 0, creditsUsed: 0, creditsIncluded: 0, usagePercentage: 0, warning: false, message: null },
+          );
+        } catch (saveErr: any) {
+          console.error('Failed to save fallback assistant message:', saveErr?.message);
+        }
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       return {
-        response: "I'm here to help! What's on your mind today?",
-        sessionId,
+        response: fallbackResponse,
+        sessionId: fallbackSessionId || sessionId,
         analysis: {
           overallInsights: 'New conversation',
           dominantQuotients: [],
@@ -374,6 +400,8 @@ export class ChatService {
     console.log(`📝 SessionId: ${sessionId}`);
     console.log(`📝 UserId: ${userId}`);
     console.log(`📝 LLM: ${selectedLLM}`);
+    let streamFallbackSessionId: string | undefined;
+    let streamFallbackAssistantSeq: number | undefined;
     try {
       // Yield analyzing status
       yield { type: 'analyzing', data: { message: 'Analyzing your message...' } };
@@ -388,6 +416,8 @@ export class ChatService {
 
       // ✅ Save user message
       await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber, userJwt);
+      streamFallbackSessionId = actualSessionId;
+      streamFallbackAssistantSeq = nextSequenceNumber + 1;
 
       // ✅ Build history
       const historyBeforeCurrent: ConversationMessage[] = existingMessages.map((m) => ({
@@ -516,6 +546,11 @@ export class ChatService {
       // Generate recommendations
       const recommendations = this.generateContextualRecommendations(analysis, conversationInsights, message);
 
+      // Defense in depth: never save empty content to Munawar (avoids 400 "Content is required")
+      const contentToSave = (typeof fullResponse === 'string' && fullResponse.trim().length > 0)
+        ? fullResponse
+        : "I'm here. Something went wrong generating that reply. Please try again.";
+
       // ✅ Save assistant message with credits snapshot for iOS
       const assistantSequenceNumber = nextSequenceNumber + 1;
       const creditCheckStream = await this.creditService.checkCredits(userId, userTier);
@@ -536,7 +571,7 @@ export class ChatService {
       await this.chatRepository.saveAssistantMessage(
         actualSessionId,
         userId,
-        fullResponse,
+        contentToSave,
         assistantSequenceNumber,
         selectedLLM,
         reasoning,
@@ -565,12 +600,12 @@ export class ChatService {
       }
       await this.chatRepository.updateSession(actualSessionId, userId, sessionUpdates, userJwt);
 
-      // Final done chunk
+      // Final done chunk (use contentToSave so client never gets empty response)
       console.log(`🏁 [ChatService] Sending DONE chunk. Reasoning length: ${reasoning?.length || 0}, sample: ${reasoning?.substring(0, 80)}`);
       yield {
         type: 'done',
         data: {
-          response: fullResponse,
+          response: contentToSave,
           sessionId: actualSessionId,
           analysis,
           recommendations,
@@ -580,6 +615,27 @@ export class ChatService {
       };
     } catch (error: any) {
       console.error('Error in processMessageWithStreaming:', error);
+      // Save fallback assistant message so Munawar's DB has a reply (user message already saved)
+      try {
+        if (streamFallbackSessionId && streamFallbackAssistantSeq !== undefined) {
+          await this.chatRepository.saveAssistantMessage(
+            streamFallbackSessionId,
+            userId,
+            "I'm here to help! Something went wrong. Please try again.",
+            streamFallbackAssistantSeq,
+            selectedLLM,
+            `Error: ${error?.message || 'Unknown'}`,
+            { overallInsights: 'New conversation', dominantQuotients: [], needsAttention: [], conversationContext: 'Error recovery' },
+            [],
+            {},
+            undefined,
+            userJwt,
+            { allowed: true, tokensUsed: 0, tokensIncluded: 0, creditsUsed: 0, creditsIncluded: 0, usagePercentage: 0, warning: false, message: null },
+          );
+        }
+      } catch (saveErr: any) {
+        console.error('Failed to save fallback assistant message (stream):', saveErr?.message);
+      }
       yield { type: 'error', data: { message: error.message || 'An error occurred' } };
     }
   }
@@ -1474,6 +1530,8 @@ export class ChatService {
     userJwt?: string,
     decisionIntelligenceMode?: boolean,
   ): AsyncGenerator<{ type: string; data: any }, void, unknown> {
+    let stream2FallbackSessionId: string | undefined;
+    let stream2FallbackAssistantSeq: number | undefined;
     try {
       // ✅ Get or create session in database
       const session = await this.chatRepository.getOrCreateSession(
@@ -1493,6 +1551,8 @@ export class ChatService {
 
       // ✅ Save user message to database
       await this.chatRepository.saveUserMessage(actualSessionId, userId, message, nextSequenceNumber, userJwt);
+      stream2FallbackSessionId = actualSessionId;
+      stream2FallbackAssistantSeq = nextSequenceNumber + 1;
 
       // ✅ Build history array
       const historyBeforeCurrent: ConversationMessage[] = existingMessages.map((m) => ({
@@ -1641,6 +1701,11 @@ export class ChatService {
         message,
       );
 
+      // Defense in depth: never save empty content to Munawar
+      const contentToSaveStream2 = (typeof fullResponse === 'string' && fullResponse.trim().length > 0)
+        ? fullResponse
+        : "I'm here. Something went wrong generating that reply. Please try again.";
+
       // Save assistant message with credits snapshot for iOS
       const assistantSequenceNumber = nextSequenceNumber + 1;
       const creditCheckStream2 = await this.creditService.checkCredits(userId, userTier);
@@ -1661,7 +1726,7 @@ export class ChatService {
       await this.chatRepository.saveAssistantMessage(
         actualSessionId,
         userId,
-        fullResponse,
+        contentToSaveStream2,
         assistantSequenceNumber,
         selectedLLM,
         reasoning,
@@ -1697,10 +1762,10 @@ export class ChatService {
 
       await this.chatRepository.updateSession(actualSessionId, userId, sessionUpdates, userJwt);
 
-      // Send final data
+      // Send final data (use contentToSaveStream2 so client never gets empty)
       yield { type: 'done', data: { 
         sessionId: actualSessionId,
-        response: fullResponse,
+        response: contentToSaveStream2,
         reasoning,
         analysis,
         recommendations,
@@ -1708,6 +1773,26 @@ export class ChatService {
       } };
     } catch (error: any) {
       console.error('Error in processMessageStream:', error);
+      if (stream2FallbackSessionId && stream2FallbackAssistantSeq !== undefined) {
+        try {
+          await this.chatRepository.saveAssistantMessage(
+            stream2FallbackSessionId,
+            userId,
+            "I'm here to help! Something went wrong. Please try again.",
+            stream2FallbackAssistantSeq,
+            selectedLLM,
+            `Error: ${error?.message || 'Unknown'}`,
+            { overallInsights: 'New conversation', dominantQuotients: [], needsAttention: [], conversationContext: 'Error recovery' },
+            [],
+            {},
+            undefined,
+            userJwt,
+            { allowed: true, tokensUsed: 0, tokensIncluded: 0, creditsUsed: 0, creditsIncluded: 0, usagePercentage: 0, warning: false, message: null },
+          );
+        } catch (saveErr: any) {
+          console.error('Failed to save fallback assistant message (stream2):', saveErr?.message);
+        }
+      }
       yield { type: 'error', data: { message: error.message || 'An error occurred' } };
     }
   }

@@ -63,7 +63,7 @@ This is the decision step: do you have enough data to make your decision? …"
 - Purpose: Awareness of their pattern improves decision quality and speed; this is Brand Scaling's methodology only.
 
 ## OUTPUT FORMAT
-Respond with a valid JSON object only: { "reasoning": "Your internal reasoning (what you are thinking).", "response": "What you say to the user (your actual message)." }. Use \\n for line breaks in the response. No other text before or after the JSON.
+Respond with a valid JSON object only: { "reasoning": "Your internal reasoning (what you are thinking).", "response": "What you say to the user (your actual message)." }. Use \\n for line breaks in the response. No other text before or after the JSON. Keep "reasoning" to 2–4 sentences so "response" has room; the "response" field must never be empty — it must always contain your full reply to the user.
 `.trim();
 
 // =============================================================================

@@ -133,7 +133,7 @@ export class AdviceGeneratorService {
         reasoningMessages,
         {
           temperature: 0.7,
-          max_tokens: Math.min(maxOutputTokens, 600), // Use tier limit or 600, whichever is smaller
+          max_tokens: maxOutputTokens, // Full tier limit so both reasoning and response fit (was 600 cap → caused truncation → empty response)
           response_format: 'json_object', // Force JSON output for OpenAI
         },
       );
@@ -242,6 +242,13 @@ export class AdviceGeneratorService {
         cleanResponse = this.ensureEndValidatorInResponse(cleanResponse, coreType);
       }
 
+      // Root-cause fix: LLM sometimes returns {"reasoning": "...", "response": ""}. Never return empty.
+      const EMPTY_RESPONSE_FALLBACK = "Could you say a bit more so I can respond properly?";
+      if (!cleanResponse || !cleanResponse.trim()) {
+        console.warn('[AdviceGenerator] LLM returned empty response; using fallback. Raw length:', fullResponse?.length ?? 0);
+        cleanResponse = EMPTY_RESPONSE_FALLBACK;
+      }
+
       // Note: Don't strip ** markdown as frontend renders it as bold
 
       // Log for debugging
@@ -330,7 +337,7 @@ export class AdviceGeneratorService {
 
       const streamOptions: any = {
         temperature: 0.7,
-        max_tokens: Math.min(maxOutputTokens, 600),
+        max_tokens: maxOutputTokens,
       };
 
       // Add response_format for OpenAI models
@@ -401,12 +408,20 @@ export class AdviceGeneratorService {
         finalResponse = this.ensureEndValidatorInResponse(finalResponse || fullResponse, coreType);
       }
 
+      // Root-cause fix: never yield empty response (LLM sometimes returns empty "response" field)
+      const streamFallback = "I'm here. Could you say a bit more so I can respond properly?";
+      const outContent = (finalResponse || fullResponse || '').trim();
+      const contentToYield = outContent.length > 0 ? outContent : streamFallback;
+      if (outContent.length === 0) {
+        console.warn('[AdviceGenerator STREAM] LLM returned empty response; using fallback. fullResponse length:', fullResponse?.length ?? 0);
+      }
+
       // Yield final reasoning if we got more
       if (finalReasoning && finalReasoning !== lastReasoningExtracted) {
         yield { type: 'reasoning', content: finalReasoning };
       }
 
-      yield { type: 'done', content: finalResponse || fullResponse };
+      yield { type: 'done', content: contentToYield };
     } catch (error: any) {
       console.error('Error in generateAdviceWithProfileStreaming:', error);
       yield { type: 'done', content: `Error: ${error.message}` };
@@ -479,7 +494,7 @@ export class AdviceGeneratorService {
       // Force JSON output format for OpenAI models
       const streamOptions: any = {
         temperature: 0.7,
-        max_tokens: Math.min(maxOutputTokens, 600), // Use tier limit or 600, whichever is smaller
+        max_tokens: maxOutputTokens, // Full tier limit so both reasoning and response fit (was 600 cap → caused truncation → empty response)
       };
       
       // Add response_format for OpenAI models to force JSON output
@@ -561,7 +576,13 @@ export class AdviceGeneratorService {
         }
       }
 
-      yield { type: 'done', content: finalResponse || fullResponse };
+      const streamFallbackOld = "I'm here. Could you say a bit more so I can respond properly?";
+      const outContentOld = (finalResponse || fullResponse || '').trim();
+      const contentToYieldOld = outContentOld.length > 0 ? outContentOld : streamFallbackOld;
+      if (outContentOld.length === 0) {
+        console.warn('[AdviceGenerator Stream OLD] LLM returned empty response; using fallback.');
+      }
+      yield { type: 'done', content: contentToYieldOld };
     } catch (error) {
       console.error('Error in streaming advice generation:', error);
       yield { type: 'done', content: `Error: ${error.message}` };
@@ -645,8 +666,8 @@ Example:
 IMPORTANT: 
 - Output ONLY the JSON object, nothing else
 - Always include both fields
-- The reasoning is your internal thoughts
-- The response is what you say to them (conversational, warm, direct)`;
+- Keep reasoning to 2–4 sentences so the response field has room
+- The reasoning is your internal thoughts; the response is what you say to them (conversational, warm, direct) — response must never be empty`;
     } else {
       return `=== THE ALCHEMIST (First Meeting - Streaming) ===
 
@@ -1016,7 +1037,8 @@ CRITICAL OUTPUT FORMAT — You MUST respond with valid JSON in this EXACT format
 {
   "reasoning": "Your private thought process: What do you understand about this person from their E-DNA profile (all 7 layers) and current psychological state? What deeper pattern or insight emerges when you combine this knowledge with their specific message? What makes your response uniquely tailored to them rather than generic advice? Think through this naturally - weave together insights from their core type, subtype, learning style, communication preferences, values, and current emotional state. Don't follow a rigid template - let your understanding flow naturally.",
   "response": "Your response that shows you KNOW this person across ALL their layers. Reference their specific patterns without using jargon. For emotional topics: one rich paragraph (4-6 sentences). For simple questions: 2-3 sentences. Use **bold** for key phrases. Use \\n for line breaks when needed."
-}`;
+}
+Keep "reasoning" to 2–4 sentences so "response" has room. The "response" field must NEVER be empty — it must always contain your actual reply to the user.`;
     } else {
       // Early conversation - no profile yet
       return `=== THE ALCHEMIST'S ART (First Meeting) ===
@@ -1046,7 +1068,8 @@ CRITICAL OUTPUT FORMAT — You MUST respond with valid JSON in this EXACT format
 {
   "reasoning": "Your read of this first exchange: What you notice, what you're curious about, why you're responding this way",
   "response": "Your warm, genuine response — meeting them where they are. Use \\n for line breaks if needed."
-}`;
+}
+Keep reasoning to 2–4 sentences. The "response" field must never be empty.`;
     }
   }
 

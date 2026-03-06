@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
 import { ChatService } from '../services/chat.service';
+import { AdviceGeneratorService } from '../services/advice-generator.service';
 import { RateLimitGuard } from '../guards/rate-limit.guard';
 import { v4 as uuidv4 } from 'uuid';
 import { getAvailableLLMs, DEFAULT_LLM } from '../config/llm-models.config';
@@ -36,6 +37,7 @@ export class ChatController {
     private readonly creditService: CreditService,
     private readonly ednaProfileService: EdnaProfileService,
     private readonly parallelLLMService: ParallelLLMService,
+    private readonly adviceGenerator: AdviceGeneratorService,
   ) {}
 
   @Post()
@@ -711,6 +713,75 @@ export class ChatController {
         layer7: quizData.layer7,
       },
       instructions,
+    };
+  }
+
+  /** Test that agent returns non-empty response/reasoning for each core type (alchemist, architect, mixed). */
+  @Post('test-response')
+  @ApiOperation({ summary: 'Test agent response/reasoning for a core type (no session/DB)' })
+  @ApiResponse({ status: 200, description: 'Returns response and reasoning for the given core type' })
+  async testResponseForCoreType(
+    @Body() body: { coreType: string; message?: string },
+  ) {
+    const coreType = (body?.coreType || 'mixed').toLowerCase();
+    const message = body?.message || 'I need help deciding whether to take the new job offer.';
+    const valid = ['alchemist', 'architect', 'mixed'];
+    if (!valid.includes(coreType)) {
+      throw new HttpException({ message: `coreType must be one of: ${valid.join(', ')}` }, HttpStatus.BAD_REQUEST);
+    }
+    const testProfiles: Record<string, EdnaQuizResults> = {
+      alchemist: {
+        layer1: { coreType: 'alchemist', strength: 'Strong', architectScore: 2, alchemistScore: 8 },
+        layer2: { subtype: 'Energetic Empath', description: 'Feels and connects deeply' },
+        layer3: { integration: 'Medium', integrationPercent: 50 },
+        layer4: { modalityPreference: 'Kinesthetic', approach: 'Global', conceptProcessing: 'Abstract', workingEnvironment: 'Collaborative', pace: 'Flexible' },
+        layer5: { status: 'Neurotypical', traits: { ntScore: 6, ndScore: 0, teScore: 0 } },
+        layer6: { mindset: 'Growth/Abundance', personality: 'High Empathy', communication: 'Diplomatic Communicator' },
+        layer7: { faithOrientation: 'Faith-Guided', controlOrientation: 'Go With Flow', fairness: 'Compassion', integrity: 'Diplomatic Honesty', growth: 'Growth Focused', impact: 'Others-Focused Impact' },
+      },
+      architect: {
+        layer1: { coreType: 'architect', strength: 'Strong', architectScore: 8, alchemistScore: 2 },
+        layer2: { subtype: 'Master Strategist', description: 'Strategic planning excellence' },
+        layer3: { integration: 'Medium', integrationPercent: 50 },
+        layer4: { modalityPreference: 'Visual', approach: 'Sequential', conceptProcessing: 'Concrete', workingEnvironment: 'Individual', pace: 'Fast-Paced' },
+        layer5: { status: 'Neurotypical', traits: { ntScore: 6, ndScore: 0, teScore: 0 } },
+        layer6: { mindset: 'Growth/Abundance', personality: 'Confident & Steady', communication: 'Direct Communicator' },
+        layer7: { faithOrientation: 'Self-Reliant', controlOrientation: 'In Control', fairness: 'Responsibility', integrity: 'Direct Honesty', growth: 'Growth Focused', impact: 'Self-Focused Impact' },
+      },
+      mixed: {
+        layer1: { coreType: 'mixed', strength: 'Moderate', architectScore: 5, alchemistScore: 5 },
+        layer2: { subtype: 'Switching Loop', description: 'Alternates between modes' },
+        layer3: { integration: 'Low', integrationPercent: 30 },
+        layer4: { modalityPreference: 'Multimodal', approach: 'Global', conceptProcessing: 'Abstract', workingEnvironment: 'Adaptive', pace: 'Flexible' },
+        layer5: { status: 'Context Dependent', traits: { ntScore: 3, ndScore: 3, teScore: 0 } },
+        layer6: { mindset: 'Growth/Scarcity', personality: 'Moderate Confidence', communication: 'Diplomatic Communicator' },
+        layer7: { faithOrientation: 'Dual-Reliant', controlOrientation: 'Shared Control', fairness: 'Balanced', integrity: 'Balanced', growth: 'Steady Growth', impact: 'Shared Impact' },
+      },
+    };
+    const ednaProfile = buildEdnaProfile(`test-${coreType}`, testProfiles[coreType], new Date().toISOString());
+    const result = await this.adviceGenerator.generateAdviceWithProfile(
+      message,
+      {},
+      [],
+      'gpt-4o',
+      undefined,
+      undefined,
+      ednaProfile,
+      'free',
+      true, // decisionIntelligenceMode
+    );
+    const responseTrimmed = (result.response || '').trim();
+    const reasoningTrimmed = (result.reasoning || '').trim();
+    const responseEmpty = responseTrimmed.length === 0;
+    const reasoningEmpty = reasoningTrimmed.length === 0;
+    return {
+      coreType,
+      message,
+      response: result.response,
+      reasoning: result.reasoning,
+      responseEmpty,
+      reasoningEmpty,
+      ok: !responseEmpty && !reasoningEmpty,
     };
   }
 
