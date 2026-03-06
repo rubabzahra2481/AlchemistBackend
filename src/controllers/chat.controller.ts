@@ -290,34 +290,26 @@ export class ChatController {
     const iosBackend = (this.chatService as any).iosBackend;
     const budgetTracker = (this.chatService as any).budgetTracker;
     
-    // Get user tier (or TIER_OVERRIDE for local testing: basic | standard | pro | elite)
-    const { getTierOverride } = require('../config/tier-pricing.config');
-    const tierOverride = getTierOverride();
-    if (tierOverride) {
-      console.log(`🏷️ [tier-info] Using TIER_OVERRIDE=${tierOverride} for userId=${userId?.slice(0, 8)}...`);
-    }
-    let userTierRaw: string = tierOverride ?? 'free';
-    if (!tierOverride) {
+    // Tier from Munawar's API only (no override)
+    let userTierRaw: string = 'free';
+    try {
+      const profileResponse = await iosBackend.getUserProfile(userId, userJwt);
+      if (profileResponse?.success && profileResponse.user?.tier) {
+        userTierRaw = profileResponse.user.tier.toLowerCase();
+      }
+    } catch (e: any) {
       try {
-        const profileResponse = await iosBackend.getUserProfile(userId, userJwt);
-        if (profileResponse?.success && profileResponse.user?.tier) {
-          userTierRaw = profileResponse.user.tier.toLowerCase();
+        const userResponse = await iosBackend.getUserById(userId, userJwt);
+        if (userResponse?.success && userResponse.user?.tier) {
+          userTierRaw = userResponse.user.tier.toLowerCase();
         }
-      } catch (e: any) {
-        try {
-          const userResponse = await iosBackend.getUserById(userId, userJwt);
-          if (userResponse?.success && userResponse.user?.tier) {
-            userTierRaw = userResponse.user.tier.toLowerCase();
-          }
-        } catch (e2: any) {
-          // Keep default 'free'
-        }
+      } catch (e2: any) {
+        // Keep default 'free' when API fails
       }
     }
 
-    // Import tier config functions
-    const { 
-      validateUserTier, 
+    const {
+      validateUserTier,
       getAllowedModelsForTier, 
       getOutputLimitForTier,
       getInputLimitForTier,

@@ -1,10 +1,12 @@
 import * as dotenv from 'dotenv';
 import { join, resolve } from 'path';
 
-// Load .env file before anything else
-const envPath = resolve(__dirname, '..', '..', '.env');
-console.log('📁 [Bootstrap] Looking for .env at:', envPath);
-dotenv.config({ path: envPath, override: true });
+// Load .env from backend folder (works whether run from backend/ or project root)
+const backendEnv = resolve(__dirname, '..', '..', '.env');
+const cwdEnv = join(process.cwd(), '.env');
+dotenv.config({ path: cwdEnv });
+dotenv.config({ path: backendEnv, override: true });
+console.log('📁 [Bootstrap] .env loaded (cwd:', process.cwd(), ')');
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

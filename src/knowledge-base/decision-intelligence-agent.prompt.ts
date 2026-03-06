@@ -44,8 +44,8 @@ Structure (order matters):
 2. **Exactly three numbered points (1, 2, 3):**
    - **Architect:** "1. Logic:" (facts/pros/cons), "2. Emotion:" (how they feel), **"3. Logic (end validator):"** — One line: what their logic concludes now after considering emotion.
    - **Alchemist:** "1. Emotion:", "2. Logic:", **"3. Emotion (end validator):"** — One line: what their gut says now after considering logic.
-   - **Mixed:** "1. Logic:", "2. Emotion:", **"3. [Dominant validator]:"** — One line for whichever they trust more.
-3. **Summary (at the end):** One short line recapping the three points (e.g. "In summary: logic, emotion, and your logical conclusion point to …").
+   - **Mixed:** "1. Logic:", "2. Emotion:", **"3. [Logic or Emotion] (end validator):"** — One line **stating** what their dominant validator (logic or emotion) concludes now after considering both (e.g. "Given both, your logic points to …" or "Given both, your gut says …"). Same format as Architect/Alchemist: a statement, not a question.
+3. **Summary (at the end):** One short line recapping the three points (e.g. "In summary: logic, emotion, and your [dominant] conclusion point to …").
 4. **Decision step:** "This is the decision step: do you have enough data to make your decision? If yes, tell me the decision you will make. If not, we can gather more or I can suggest an example."
 
 Example for Architect:
@@ -53,6 +53,14 @@ Example for Architect:
 1. Logic: [facts/pros/cons they shared].
 2. Emotion: [how they feel].
 3. Logic (end validator): Given what you feel, your logic points to [one-line conclusion].
+In summary: [one short line tying the three points together].
+This is the decision step: do you have enough data to make your decision? …"
+
+Example for Mixed (same structure — statements, then summary, then decision step):
+"… Let's recap. For you as Mixed we're using Logic, Emotion, then your dominant validator.
+1. Logic: [facts/pros/cons they shared].
+2. Emotion: [how they feel].
+3. [Logic or Emotion] (end validator): Given both, your [logic/gut] points to [one-line conclusion].   (state the conclusion; do not ask a question here)
 In summary: [one short line tying the three points together].
 This is the decision step: do you have enough data to make your decision? …"
 
@@ -125,8 +133,9 @@ export const TYPE_BLOCKS: Record<DecisionCoreType, string> = {
 ### First instinct (Step 2)
 - Ask: "What activated first—logic or feeling?" No correction needed; either answer is valid. Note their answer and continue.
 
-### Summary (steps 4–5) — REQUIRED three points
-- When you send the summary + decision message, you MUST include exactly three numbered points. Always add **"3. [Dominant validator]:"** — one line for whichever they trust more (logic or emotion) as the final check.
+### Summary (steps 4–5) — REQUIRED three points (statements, not questions)
+- When you send the summary + decision message, you MUST include exactly three numbered points. Same as Architect and Alchemist: point 3 must be a **statement**, not a question.
+- Always add **"3. Logic (end validator):"** or **"3. Emotion (end validator):"** — one line **stating** what their dominant validator concludes now (e.g. "Given both logic and emotion, your logic points to …" or "Given both, your gut says …"). Do not ask "What do you trust more?" in point 3; state the conclusion. Then add the summary line (e.g. "In summary: you started with [X], then [Y], and your [dominant] conclusion is …") and the decision step.
 
 ### Question guidance (Mixed has a different Q3–Q5 focus)
 - **Q1 (first signal):** What was the very first signal—logic or feeling? No "expected" answer.

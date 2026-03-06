@@ -20,7 +20,6 @@ import {
   getDefaultModelForTier, 
   getOutputLimitForTier,
   getAllowedModelsForTier,
-  getTierOverride,
   UserTier 
 } from '../config/tier-pricing.config';
 
@@ -144,25 +143,18 @@ export class ChatService {
       // Build a cleaned Profile object with confidence/evidence gating and safety/conflict
       let cleanedProfile = this.buildCleanProfile(psychProfile);
 
-      // 📝 Extract user tier (or TIER_OVERRIDE for local testing)
-      const tierOverride = getTierOverride();
-      let userTierRaw: string = tierOverride ?? 'free';
-
-      if (!tierOverride) {
-        // 🔗 Fetch E-DNA profile from iOS backend if enabled (for personalization)
-        if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
-          try {
-            const ednaProfile = await this.iosBackend.getUserProfile(userId, userJwt);
-            if (ednaProfile?.success && ednaProfile.ednaProfile) {
-              // Extract tier from user profile
-              if (ednaProfile.user?.tier) {
-                userTierRaw = ednaProfile.user.tier.toLowerCase();
-                console.log(`📝 [ChatService] User tier: ${userTierRaw}`);
-              }
-            
-            // Merge E-DNA profile into cleaned profile for personalization
-            const confidence = typeof ednaProfile.ednaProfile.confidence === 'string' 
-              ? parseFloat(ednaProfile.ednaProfile.confidence) 
+      // 📝 Get user tier from Munawar's API (no override)
+      let userTierRaw: string = 'free';
+      if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
+        try {
+          const ednaProfile = await this.iosBackend.getUserProfile(userId, userJwt);
+          if (ednaProfile?.success && ednaProfile.ednaProfile) {
+            if (ednaProfile.user?.tier) {
+              userTierRaw = ednaProfile.user.tier.toLowerCase();
+              console.log(`📝 [ChatService] User tier: ${userTierRaw}`);
+            }
+            const confidence = typeof ednaProfile.ednaProfile.confidence === 'string'
+              ? parseFloat(ednaProfile.ednaProfile.confidence)
               : ednaProfile.ednaProfile.confidence;
             cleanedProfile = {
               ...cleanedProfile,
@@ -176,22 +168,19 @@ export class ChatService {
             };
             console.log(`🧬 [ChatService] E-DNA profile loaded: ${ednaProfile.ednaProfile.coreType} (${confidence} confidence)`);
           }
-          } catch (error: any) {
-            console.warn(`⚠️ [ChatService] Could not fetch E-DNA profile:`, error?.message);
-            // Continue without E-DNA profile - not critical
-          }
+        } catch (error: any) {
+          console.warn(`⚠️ [ChatService] Could not fetch E-DNA profile:`, error?.message);
         }
-        // If tier not found from getUserProfile, try getUserById as fallback
-        if (userTierRaw === 'free' && userId !== '00000000-0000-0000-0000-000000000000') {
-          try {
-            const userResponse = await this.iosBackend.getUserById(userId, userJwt);
-            if (userResponse?.success && userResponse.user?.tier) {
-              userTierRaw = userResponse.user.tier.toLowerCase();
-              console.log(`📝 [ChatService] User tier from getUserById: ${userTierRaw}`);
-            }
-          } catch (error: any) {
-            console.warn(`⚠️ [ChatService] Could not fetch user tier:`, error?.message);
+      }
+      if (userTierRaw === 'free' && userId !== '00000000-0000-0000-0000-000000000000') {
+        try {
+          const userResponse = await this.iosBackend.getUserById(userId, userJwt);
+          if (userResponse?.success && userResponse.user?.tier) {
+            userTierRaw = userResponse.user.tier.toLowerCase();
+            console.log(`📝 [ChatService] User tier from getUserById: ${userTierRaw}`);
           }
+        } catch (error: any) {
+          console.warn(`⚠️ [ChatService] Could not fetch user tier:`, error?.message);
         }
       }
 
@@ -446,10 +435,9 @@ export class ChatService {
       analysis.overallInsights = enhancedInsights;
       let cleanedProfile = this.buildCleanProfile(psychProfile);
 
-      // 📝 Get user tier (or TIER_OVERRIDE for local testing)
-      const tierOverrideStream = getTierOverride();
-      let userTierRaw: string = tierOverrideStream ?? 'free';
-      if (!tierOverrideStream && this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
+      // 📝 Get user tier from Munawar's API (no override)
+      let userTierRaw: string = 'free';
+      if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
         try {
           const ednaProfileResponse = await this.iosBackend.getUserProfile(userId, userJwt);
           if (ednaProfileResponse?.success && ednaProfileResponse.user?.tier) {
@@ -464,6 +452,16 @@ export class ChatService {
           } catch (fallbackError: any) {
             console.warn(`⚠️ [ChatService StreamV2] Could not fetch user tier`);
           }
+        }
+      }
+      if (userTierRaw === 'free' && userId !== '00000000-0000-0000-0000-000000000000') {
+        try {
+          const userResponse = await this.iosBackend.getUserById(userId, userJwt);
+          if (userResponse?.success && userResponse.user?.tier) {
+            userTierRaw = userResponse.user.tier.toLowerCase();
+          }
+        } catch (e: any) {
+          // keep free
         }
       }
       const userTier: UserTier = validateUserTier(userTierRaw);
@@ -1595,11 +1593,8 @@ export class ChatService {
 
       let cleanedProfile = this.buildCleanProfile(psychProfile);
       
-      // 📝 Extract user tier (or TIER_OVERRIDE for local testing)
-      const tierOverrideStream2 = getTierOverride();
-      let userTierRaw: string = tierOverrideStream2 ?? 'free';
-
-      // Fetch E-DNA profile and tier (only if no override)
+      // 📝 Get user tier from Munawar's API (no override)
+      let userTierRaw: string = 'free';
       let ednaProfile: any = null;
       if (this.ednaProfileService.isEnabled() && userId !== '00000000-0000-0000-0000-000000000000') {
         try {
@@ -1608,7 +1603,7 @@ export class ChatService {
           console.error(`🧬 [ChatService] ❌ E-DNA profile FAILED: ${ednaError?.message}`);
         }
       }
-      if (!tierOverrideStream2 && this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
+      if (this.useIOSEDNA && userId !== '00000000-0000-0000-0000-000000000000') {
         try {
           const ednaProfileResponse = await this.iosBackend.getUserProfile(userId, userJwt);
           if (ednaProfileResponse?.success && ednaProfileResponse.user?.tier) {
@@ -1625,6 +1620,16 @@ export class ChatService {
           } catch (fallbackError: any) {
             console.warn(`⚠️ [ChatService Stream] Could not fetch user tier`);
           }
+        }
+      }
+      if (userTierRaw === 'free' && userId !== '00000000-0000-0000-0000-000000000000') {
+        try {
+          const userResponse = await this.iosBackend.getUserById(userId, userJwt);
+          if (userResponse?.success && userResponse.user?.tier) {
+            userTierRaw = userResponse.user.tier.toLowerCase();
+          }
+        } catch (e: any) {
+          // keep free
         }
       }
 

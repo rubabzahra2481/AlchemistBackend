@@ -735,13 +735,13 @@ Example of CORRECT output: Hello! What brings you here today?`;
     const hasEmotionThenLogic = /1\.\s*(\*\*)?Emotion(\*\*)?\s*:?/i.test(text) && /2\.\s*(\*\*)?Logic(\*\*)?\s*:?/i.test(text);
     if (!hasLogicThenEmotion && !hasEmotionThenLogic) return responseText;
 
-    // Third point text — appears as 3. in the list (Architect: Logic, Alchemist: Emotion, Mixed: Dominant)
+    // Third point text — statement (not question), same style for all types (Architect: Logic, Alchemist: Emotion, Mixed: Dominant)
     const thirdPoint =
       coreType === 'architect'
-        ? '3. Logic (end validator): Given the logic and emotion you shared, what does your logic conclude now?'
+        ? '3. Logic (end validator): Given the logic and emotion you shared, your logic concludes the next step.'
         : coreType === 'alchemist'
-          ? '3. Emotion (end validator): Given the logic and emotion you shared, what does your gut say now?'
-          : '3. Dominant validator: What do you trust more right now—logic or emotion—and what does it tell you?';
+          ? '3. Emotion (end validator): Given the logic and emotion you shared, your gut points to the next step.'
+          : '3. Dominant validator: Given both logic and emotion you shared, your dominant validator (logic or emotion) points to what you need to decide.';
     const summaryLine = 'In summary: logic, emotion, and your end validator point to what you need to decide.';
 
     // Insert the 3rd point immediately after the "2. Emotion" (or "2. Logic") paragraph so it is the literal third point
