@@ -1169,63 +1169,33 @@ Keep reasoning to 2–4 sentences. The "response" field must never be empty.`;
       { role: 'user', content: userMessage },
     ];
     console.log(`[Guest] LLM call: ${historyForLlm.length} history messages + 1 current = ${messages.length - 1} turns`);
-    const options: any = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
-    if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
-      options.response_format = { type: 'json_object' };
-    }
+    const options = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
     const llmResponse = await this.llmOrchestrator.generateResponse(selectedLLM, messages, options);
-    const fullResponse = llmResponse.content || '';
-
-    let cleanResponse = '';
-    let extractedReasoning = '';
-    try {
-      const json = JSON.parse(fullResponse);
-      cleanResponse = (json.response || '').trim();
-      extractedReasoning = (json.reasoning || '').trim();
-    } catch {
-      const responseMatch = fullResponse.match(/"response"\s*:\s*"([\s\S]*?)"\s*}/);
-      const reasoningMatch = fullResponse.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*,/);
-      if (responseMatch) cleanResponse = responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-      if (reasoningMatch) extractedReasoning = reasoningMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-    }
-    if (!cleanResponse) {
-      console.warn('[Guest] LLM returned empty response. Raw length:', fullResponse?.length ?? 0, 'First 200 chars:', fullResponse?.slice(0, 200));
-      const lastAssistant = conversationHistory.length >= 2 ? conversationHistory[conversationHistory.length - 1]?.content : undefined;
-      cleanResponse = this.getGuestFallbackResponse(userMessage, lastAssistant);
-    }
-    return { response: cleanResponse, reasoning: extractedReasoning || undefined };
+    const raw = (llmResponse.content || '').trim();
+    const cleanResponse = raw || this.getGuestFallbackResponse(userMessage, conversationHistory[conversationHistory.length - 1]?.content);
+    if (!raw) console.warn('[Guest] LLM returned empty; using fallback.');
+    return { response: cleanResponse };
   }
 
   /**
-   * Contextual fallback when guest LLM returns empty. Never repeats the same question.
-   * Uses last user message and optionally last assistant message to choose a forward-moving reply.
+   * Fallback when guest LLM returns empty. Simple, casual replies. Avoid repeating the same line if we already said it.
    */
   private getGuestFallbackResponse(lastUserMessage: string, lastAssistantResponse?: string): string {
     const lower = (lastUserMessage || '').toLowerCase().trim();
-    const lastAssistant = (lastAssistantResponse || '').toLowerCase();
-    const alreadyPastFirstInstinct =
-      /first instinct|facts and numbers|how it feels\?/.test(lastAssistant) ||
-      /got it|what are the main facts|options you're weighing|how does this decision feel/.test(lastAssistant);
-
-    if (/\b(feel|feels|felt|feeling|emotion|gut|instinct|feelings)\b/.test(lower)) {
-      return "Got it — so your instinct was more about how it feels. What are the main facts or options you're weighing?";
+    const last = (lastAssistantResponse || '').trim();
+    const carReply = "Nice! What kind of car are you thinking about, or what's making you want to buy one?";
+    const carFollowUp = "Got it — so the old one's on its way out. What's your budget or must-haves?";
+    if (/\b(car|vehicle|auto|old)\b/.test(lower) || /\b(buy|purchase|get)\s+(a\s+)?(new|another)?/.test(lower)) {
+      if (last.includes('What kind of car') || last.includes("what's making you want to buy")) return carFollowUp;
+      return carReply;
     }
-    if (/\b(logic|logical|facts|numbers|data|pros|cons|budget|safety)\b/.test(lower)) {
-      return "Got it — so the facts came first. How does this decision feel to you right now, on a scale of 1 to 10?";
+    if (/\b(job|work|career|switch|quit)\b/.test(lower)) {
+      return "Got it. What's the decision you're trying to make — switching jobs, taking an offer, or something else?";
     }
-    if (/\b(7|8|9|10|scale|out of 10)\b/.test(lower) || /\d\s*out of\s*10/.test(lower)) {
-      return "Thanks, that helps. Do you feel you have enough to make the decision now, or do you want to look at more options?";
+    if (lower.length <= 3 || /^(hi|hey|hello|yo|sup)$/.test(lower)) {
+      return "Hey! What's on your mind? Any decision you're trying to figure out?";
     }
-    if (/\b(enough|decide|decision)\b/.test(lower) && /\b(ready|have enough|think)\b/.test(lower)) {
-      return "Great. What's the decision you're making? Put it in your own words.";
-    }
-    if (alreadyPastFirstInstinct) {
-      return "That's helpful. What are the main facts or options you're weighing, or how does this decision feel to you from 1 to 10?";
-    }
-    if (/\b(car|buy|purchase|job|old)\b/.test(lower) || lower.length > 8) {
-      return "Let's work through that. Was your first instinct more about the facts and numbers, or more about how it feels?";
-    }
-    return "What are the main facts or options you're considering for this decision?";
+    return "What are you leaning toward, or what's the main thing you're trying to decide?";
   }
 
   /**
@@ -1242,39 +1212,14 @@ Keep reasoning to 2–4 sentences. The "response" field must never be empty.`;
       ...conversationHistory.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user', content: userMessage },
     ];
-    const options: any = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
-    if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
-      options.response_format = { type: 'json_object' };
-    }
+    const options = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
     let fullResponse = '';
-    let lastReasoning = '';
     for await (const chunk of this.llmOrchestrator.generateStream(selectedLLM, messages, options)) {
       fullResponse += chunk;
-      if (!fullResponse.includes('"response"')) {
-        const m = fullResponse.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*?)(?:"\s*,|\s*"response"|$)/);
-        if (m && m[1]) {
-          const current = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-          if (current.length > lastReasoning.length) {
-            lastReasoning = current;
-            yield { type: 'reasoning', content: current };
-          }
-        }
-      }
       yield { type: 'token', content: chunk };
     }
-    let finalResponse = '';
-    try {
-      const json = JSON.parse(fullResponse);
-      finalResponse = (json.response || '').trim();
-    } catch {
-      const responseMatch = fullResponse.match(/"response"\s*:\s*"([\s\S]*?)"\s*}/);
-      if (responseMatch) finalResponse = responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-    }
-    if (!finalResponse) {
-      console.warn('[Guest Stream] LLM returned empty response. Raw length:', fullResponse?.length ?? 0);
-      const lastAssistant = conversationHistory.length >= 2 ? conversationHistory[conversationHistory.length - 1]?.content : undefined;
-      finalResponse = this.getGuestFallbackResponse(userMessage, lastAssistant);
-    }
+    const finalResponse = fullResponse.trim() || this.getGuestFallbackResponse(userMessage, conversationHistory[conversationHistory.length - 1]?.content);
+    if (!fullResponse.trim()) console.warn('[Guest Stream] LLM returned empty; using fallback.');
     yield { type: 'done', content: finalResponse };
   }
 }
