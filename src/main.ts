@@ -54,10 +54,14 @@ async function bootstrap() {
     app.enableCors({
       origin: [
         'http://localhost:9001',
+        'http://localhost:8001',
+        'http://127.0.0.1:8001',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
         'http://127.0.0.1:3000',
         'http://localhost:3000',
+        'http://localhost:9000',
+        'http://127.0.0.1:9000',
         'http://192.168.1.79:8000',
         'http://192.168.1.79:9001',
         'https://main.d3970mma5pzr9g.amplifyapp.com',

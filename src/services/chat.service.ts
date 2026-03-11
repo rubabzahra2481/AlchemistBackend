@@ -14,14 +14,18 @@ import { getAllQuotients, getQuotientById } from '../knowledge-base/quotients.da
 import { ChatRepositoryAdapter } from '../repositories/chat-repository.adapter';
 import { isPremiumModel } from '../config/subscription.config';
 import { ConfigService } from '@nestjs/config';
-import { 
-  validateUserTier, 
-  canAccessModel, 
-  getDefaultModelForTier, 
+import {
+  validateUserTier,
+  canAccessModel,
+  getDefaultModelForTier,
   getOutputLimitForTier,
   getAllowedModelsForTier,
-  UserTier 
+  UserTier,
 } from '../config/tier-pricing.config';
+import { GuestSessionService } from './guest-session.service';
+import { GuestChatResponseDto } from '../dto/guest-chat.dto';
+import { GUEST_MESSAGE_CAP, GUEST_DEFAULT_LLM } from '../config/guest.config';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class ChatService {
@@ -50,6 +54,7 @@ export class ChatService {
     private readonly ednaProfileService: EdnaProfileService, // 🧬 E-DNA profile service
     private readonly budgetTracker: BudgetTrackerService, // 💰 Budget tracking for premium models
     private readonly configService: ConfigService,
+    private readonly guestSessionService: GuestSessionService,
   ) {
     // USE_IOS_EDNA: Fetch E-DNA profiles from iOS backend for personalization
     // USE_IOS_BACKEND: Use iOS backend for chat storage (requires all endpoints)
@@ -1799,6 +1804,102 @@ export class ChatService {
         }
       }
       yield { type: 'error', data: { message: error.message || 'An error occurred' } };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Guest chat (no E-DNA, no Munawar persistence; in-memory only)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Process one message for a guest user. Enforces message cap; no credit/tier lookup.
+   */
+  async processGuestMessage(
+    message: string,
+    sessionId: string,
+    guestUserId: string | undefined,
+    selectedLLM: string = GUEST_DEFAULT_LLM,
+  ): Promise<GuestChatResponseDto> {
+    const resolvedGuestId = guestUserId?.trim() || uuidv4();
+    if (this.guestSessionService.isOverCap(resolvedGuestId)) {
+      throw new HttpException(
+        {
+          message: `Guest message limit reached (${GUEST_MESSAGE_CAP} messages). Sign up or log in to continue.`,
+          code: 'GUEST_LIMIT_REACHED',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    const history = this.guestSessionService.getHistory(sessionId);
+    console.log(`[Guest] sessionId=${sessionId.slice(0, 8)}... history.length=${history.length}`);
+    const { response, reasoning } = await this.adviceGenerator.generateGuestAdvice(
+      message,
+      history,
+      selectedLLM,
+    );
+    this.guestSessionService.appendMessages(resolvedGuestId, sessionId, message, response);
+    const messagesUsed = this.guestSessionService.getMessageCount(resolvedGuestId);
+    const out: GuestChatResponseDto = {
+      response,
+      reasoning,
+      sessionId,
+      messagesUsed,
+      messagesCap: GUEST_MESSAGE_CAP,
+    };
+    if (!guestUserId?.trim()) out.guestUserId = resolvedGuestId;
+    return out;
+  }
+
+  /**
+   * Stream guest reply. Same cap and storage as processGuestMessage.
+   */
+  async *processGuestMessageWithStreaming(
+    message: string,
+    sessionId: string,
+    guestUserId: string | undefined,
+    selectedLLM: string = GUEST_DEFAULT_LLM,
+  ): AsyncGenerator<
+    { type: 'reasoning' | 'token' | 'done' | 'error'; content?: string; data?: Partial<GuestChatResponseDto> },
+    void,
+    unknown
+  > {
+    const resolvedGuestId = guestUserId?.trim() || uuidv4();
+    if (this.guestSessionService.isOverCap(resolvedGuestId)) {
+      yield {
+        type: 'error',
+        content: `Guest message limit reached (${GUEST_MESSAGE_CAP} messages). Sign up or log in to continue.`,
+      };
+      return;
+    }
+    const history = this.guestSessionService.getHistory(sessionId);
+    let fullResponse = '';
+    try {
+      for await (const chunk of this.adviceGenerator.generateGuestAdviceStream(
+        message,
+        history,
+        selectedLLM,
+      )) {
+        if (chunk.type === 'reasoning') yield { type: 'reasoning', content: chunk.content };
+        if (chunk.type === 'token') yield { type: 'token', content: chunk.content };
+        if (chunk.type === 'done') {
+          fullResponse = chunk.content || '';
+          break;
+        }
+      }
+      this.guestSessionService.appendMessages(resolvedGuestId, sessionId, message, fullResponse);
+      const messagesUsed = this.guestSessionService.getMessageCount(resolvedGuestId);
+      yield {
+        type: 'done',
+        data: {
+          response: fullResponse,
+          sessionId,
+          guestUserId: !guestUserId?.trim() ? resolvedGuestId : undefined,
+          messagesUsed,
+          messagesCap: GUEST_MESSAGE_CAP,
+        },
+      };
+    } catch (err: any) {
+      yield { type: 'error', content: err?.message || 'An error occurred' };
     }
   }
 }

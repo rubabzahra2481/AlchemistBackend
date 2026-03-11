@@ -2,6 +2,8 @@ import { Controller, Post, Body, Get, Param, Delete, Patch, Res, UseGuards, Quer
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ChatRequestDto, ChatResponseDto } from '../dto/chat.dto';
+import { GuestChatRequestDto } from '../dto/guest-chat.dto';
+import { GuestSessionService } from '../services/guest-session.service';
 import { ChatService } from '../services/chat.service';
 import { AdviceGeneratorService } from '../services/advice-generator.service';
 import { RateLimitGuard } from '../guards/rate-limit.guard';
@@ -38,6 +40,7 @@ export class ChatController {
     private readonly ednaProfileService: EdnaProfileService,
     private readonly parallelLLMService: ParallelLLMService,
     private readonly adviceGenerator: AdviceGeneratorService,
+    private readonly guestSessionService: GuestSessionService,
   ) {}
 
   @Post()
@@ -112,6 +115,67 @@ export class ChatController {
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  @Get('guest/limits')
+  @ApiOperation({ summary: 'Get guest chat limits (message cap)' })
+  @ApiResponse({ status: 200, description: 'Returns max messages allowed for guest users' })
+  getGuestLimits(): { maxMessages: number; description: string } {
+    return {
+      maxMessages: this.guestSessionService.getCap(),
+      description: 'Guest users get this many messages (user + assistant pairs) before they must sign up or log in.',
+    };
+  }
+
+  @Post('guest')
+  @ApiOperation({ summary: 'Guest chat (no login). Uses in-memory session; no E-DNA, no persistence to Munawar.' })
+  @ApiResponse({ status: 200, description: 'Returns response, reasoning, and optional guestUserId' })
+  async guestChat(
+    @Body() body: GuestChatRequestDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    const sessionId = body.sessionId || uuidv4();
+    const selectedLLM = body.selectedLLM || 'gpt-4o-mini';
+    if (body.stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Accel-Buffering', 'no');
+      try {
+        for await (const chunk of this.chatService.processGuestMessageWithStreaming(
+          body.message,
+          sessionId,
+          body.guestUserId,
+          selectedLLM,
+        )) {
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          if (typeof (res as any).flush === 'function') (res as any).flush();
+        }
+        res.end();
+      } catch (err: any) {
+        res.write(`data: ${JSON.stringify({ type: 'error', content: err?.message })}\n\n`);
+        res.end();
+      }
+      return;
+    }
+    try {
+      const result = await this.chatService.processGuestMessage(
+        body.message,
+        sessionId,
+        body.guestUserId,
+        selectedLLM,
+      );
+      res.json(result);
+    } catch (error: any) {
+      const status = error?.getStatus?.() ?? error?.status;
+      if (status === 403) {
+        const body = error?.getResponse?.() ?? error?.response ?? { message: error?.message };
+        res.status(403).json(body);
+        return;
+      }
+      res.status(500).json({ error: error?.message || 'Internal server error' });
     }
   }
 

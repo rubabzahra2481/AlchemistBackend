@@ -15,6 +15,8 @@ import {
   getDecisionIntelligenceSystemPrompt,
   type DecisionCoreType,
 } from '../knowledge-base/decision-intelligence-agent.prompt';
+import { GUEST_DECISION_COACH_SYSTEM_PROMPT } from '../knowledge-base/guest-decision-coach.prompt';
+import { GUEST_MAX_OUTPUT_TOKENS } from '../config/guest.config';
 
 @Injectable()
 export class AdviceGeneratorService {
@@ -1140,5 +1142,139 @@ Keep reasoning to 2–4 sentences. The "response" field must never be empty.`;
     }
 
     return parts.join('\n');
+  }
+
+  // -------------------------------------------------------------------------
+  // Guest chat (no E-DNA, no Munawar; in-memory only)
+  // -------------------------------------------------------------------------
+
+  getGuestSystemPrompt(): string {
+    return GUEST_DECISION_COACH_SYSTEM_PROMPT;
+  }
+
+  /**
+   * Generate one reply for guest users. No E-DNA, no credit tracking.
+   * Uses free-tier output limit. Conversation history is passed in (from GuestSessionService).
+   */
+  async generateGuestAdvice(
+    userMessage: string,
+    conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+    selectedLLM: string = 'gpt-4o-mini',
+  ): Promise<{ response: string; reasoning?: string }> {
+    const systemPrompt = this.getGuestSystemPrompt();
+    const historyForLlm = conversationHistory.map((m) => ({ role: m.role, content: m.content }));
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+      ...historyForLlm,
+      { role: 'user', content: userMessage },
+    ];
+    console.log(`[Guest] LLM call: ${historyForLlm.length} history messages + 1 current = ${messages.length - 1} turns`);
+    const options: any = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
+    if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
+      options.response_format = { type: 'json_object' };
+    }
+    const llmResponse = await this.llmOrchestrator.generateResponse(selectedLLM, messages, options);
+    const fullResponse = llmResponse.content || '';
+
+    let cleanResponse = '';
+    let extractedReasoning = '';
+    try {
+      const json = JSON.parse(fullResponse);
+      cleanResponse = (json.response || '').trim();
+      extractedReasoning = (json.reasoning || '').trim();
+    } catch {
+      const responseMatch = fullResponse.match(/"response"\s*:\s*"([\s\S]*?)"\s*}/);
+      const reasoningMatch = fullResponse.match(/"reasoning"\s*:\s*"([\s\S]*?)"\s*,/);
+      if (responseMatch) cleanResponse = responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+      if (reasoningMatch) extractedReasoning = reasoningMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+    }
+    if (!cleanResponse) {
+      console.warn('[Guest] LLM returned empty response. Raw length:', fullResponse?.length ?? 0, 'First 200 chars:', fullResponse?.slice(0, 200));
+      const lastAssistant = conversationHistory.length >= 2 ? conversationHistory[conversationHistory.length - 1]?.content : undefined;
+      cleanResponse = this.getGuestFallbackResponse(userMessage, lastAssistant);
+    }
+    return { response: cleanResponse, reasoning: extractedReasoning || undefined };
+  }
+
+  /**
+   * Contextual fallback when guest LLM returns empty. Never repeats the same question.
+   * Uses last user message and optionally last assistant message to choose a forward-moving reply.
+   */
+  private getGuestFallbackResponse(lastUserMessage: string, lastAssistantResponse?: string): string {
+    const lower = (lastUserMessage || '').toLowerCase().trim();
+    const lastAssistant = (lastAssistantResponse || '').toLowerCase();
+    const alreadyPastFirstInstinct =
+      /first instinct|facts and numbers|how it feels\?/.test(lastAssistant) ||
+      /got it|what are the main facts|options you're weighing|how does this decision feel/.test(lastAssistant);
+
+    if (/\b(feel|feels|felt|feeling|emotion|gut|instinct|feelings)\b/.test(lower)) {
+      return "Got it — so your instinct was more about how it feels. What are the main facts or options you're weighing?";
+    }
+    if (/\b(logic|logical|facts|numbers|data|pros|cons|budget|safety)\b/.test(lower)) {
+      return "Got it — so the facts came first. How does this decision feel to you right now, on a scale of 1 to 10?";
+    }
+    if (/\b(7|8|9|10|scale|out of 10)\b/.test(lower) || /\d\s*out of\s*10/.test(lower)) {
+      return "Thanks, that helps. Do you feel you have enough to make the decision now, or do you want to look at more options?";
+    }
+    if (/\b(enough|decide|decision)\b/.test(lower) && /\b(ready|have enough|think)\b/.test(lower)) {
+      return "Great. What's the decision you're making? Put it in your own words.";
+    }
+    if (alreadyPastFirstInstinct) {
+      return "That's helpful. What are the main facts or options you're weighing, or how does this decision feel to you from 1 to 10?";
+    }
+    if (/\b(car|buy|purchase|job|old)\b/.test(lower) || lower.length > 8) {
+      return "Let's work through that. Was your first instinct more about the facts and numbers, or more about how it feels?";
+    }
+    return "What are the main facts or options you're considering for this decision?";
+  }
+
+  /**
+   * Stream guest reply (same prompt and limits as generateGuestAdvice).
+   */
+  async *generateGuestAdviceStream(
+    userMessage: string,
+    conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+    selectedLLM: string = 'gpt-4o-mini',
+  ): AsyncGenerator<{ type: 'reasoning' | 'token' | 'done'; content: string }, void, unknown> {
+    const systemPrompt = this.getGuestSystemPrompt();
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user', content: userMessage },
+    ];
+    const options: any = { temperature: 0.7, max_tokens: GUEST_MAX_OUTPUT_TOKENS };
+    if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
+      options.response_format = { type: 'json_object' };
+    }
+    let fullResponse = '';
+    let lastReasoning = '';
+    for await (const chunk of this.llmOrchestrator.generateStream(selectedLLM, messages, options)) {
+      fullResponse += chunk;
+      if (!fullResponse.includes('"response"')) {
+        const m = fullResponse.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*?)(?:"\s*,|\s*"response"|$)/);
+        if (m && m[1]) {
+          const current = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+          if (current.length > lastReasoning.length) {
+            lastReasoning = current;
+            yield { type: 'reasoning', content: current };
+          }
+        }
+      }
+      yield { type: 'token', content: chunk };
+    }
+    let finalResponse = '';
+    try {
+      const json = JSON.parse(fullResponse);
+      finalResponse = (json.response || '').trim();
+    } catch {
+      const responseMatch = fullResponse.match(/"response"\s*:\s*"([\s\S]*?)"\s*}/);
+      if (responseMatch) finalResponse = responseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+    }
+    if (!finalResponse) {
+      console.warn('[Guest Stream] LLM returned empty response. Raw length:', fullResponse?.length ?? 0);
+      const lastAssistant = conversationHistory.length >= 2 ? conversationHistory[conversationHistory.length - 1]?.content : undefined;
+      finalResponse = this.getGuestFallbackResponse(userMessage, lastAssistant);
+    }
+    yield { type: 'done', content: finalResponse };
   }
 }

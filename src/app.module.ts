@@ -21,6 +21,7 @@ import { ChatRepositoryAdapter } from './repositories/chat-repository.adapter';
 import { RollingSummaryService } from './services/rolling-summary.service';
 import { BudgetTrackerService } from './services/budget-tracker.service';
 import { UsageStoreService } from './services/usage-store.service';
+import { GuestSessionService } from './services/guest-session.service';
 
 /**
  * App Module - NO DATABASE REQUIRED
@@ -68,6 +69,8 @@ import { UsageStoreService } from './services/usage-store.service';
     RollingSummaryService,
     // Budget Tracker Service (for per-model monthly credit limits)
     BudgetTrackerService,
+    // Guest chat (in-memory only; no E-DNA, no Munawar persistence)
+    GuestSessionService,
   ],
 })
 export class AppModule {}
