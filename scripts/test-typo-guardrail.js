@@ -5,7 +5,7 @@
  */
 const API = process.env.API_BASE || 'http://localhost:9000';
 const sessionId = 'a1b2c3d4-e5f6-4780-a567-0e02b2c3d480';
-const userId = 'test-user-typo-guardrail';
+const userId = 'a1b2c3d4-e5f6-4780-a567-0e02b2c3d481'; // valid UUID required by /chat
 
 async function main() {
   console.log('Testing typo guardrail (protopese → propose)');
