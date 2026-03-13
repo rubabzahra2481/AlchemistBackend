@@ -17,6 +17,7 @@ import {
 } from '../knowledge-base/decision-intelligence-agent.prompt';
 import { GUEST_DECISION_COACH_SYSTEM_PROMPT } from '../knowledge-base/guest-decision-coach.prompt';
 import { GUEST_MAX_OUTPUT_TOKENS } from '../config/guest.config';
+import { detectTypo } from '../config/typo-guardrail.data';
 
 @Injectable()
 export class AdviceGeneratorService {
@@ -101,7 +102,17 @@ export class AdviceGeneratorService {
           content: msg.content,
         })),
       );
-      
+
+      // Typo guardrail (main DI only): inject instruction and enforce confirmation in response if needed
+      const detectedTypo = decisionIntelligenceMode ? detectTypo(userMessage) : null;
+      if (detectedTypo) {
+        console.log(`[Typo guardrail] Detected "${detectedTypo.typo}" → "${detectedTypo.correct}"`);
+        reasoningMessages.push({
+          role: 'system',
+          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypo.typo}" which likely means "${detectedTypo.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypo.correct}?" Then proceed with your reply.`,
+        });
+      }
+
       // Add current user message
       reasoningMessages.push({
         role: 'user',
@@ -238,6 +249,16 @@ export class AdviceGeneratorService {
         }
       }
 
+      // Typo guardrail enforcement: if we detected a typo but the model didn't ask for confirmation, prepend it
+      if (detectedTypo && cleanResponse) {
+        const lower = cleanResponse.toLowerCase();
+        const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypo.correct.toLowerCase());
+        if (!hasConfirm) {
+          cleanResponse = `Just to confirm, did you mean ${detectedTypo.correct}? ${cleanResponse}`;
+          console.log(`[Typo guardrail] Prepend confirmation (model did not ask)`);
+        }
+      }
+
       // Decision Intelligence: ensure end-validator third point is present (safety net if LLM skipped it)
       if (decisionIntelligenceMode && cleanResponse) {
         const coreType = this.getDecisionCoreType(ednaProfile);
@@ -325,8 +346,16 @@ export class AdviceGeneratorService {
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
-        { role: 'user', content: userMessagePrompt },
       );
+      const detectedTypoStream1 = decisionIntelligenceMode ? detectTypo(userMessage) : null;
+      if (detectedTypoStream1) {
+        console.log(`[Typo guardrail] Stream1 detected "${detectedTypoStream1.typo}" → "${detectedTypoStream1.correct}"`);
+        reasoningMessages.push({
+          role: 'system',
+          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypoStream1.typo}" which likely means "${detectedTypoStream1.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypoStream1.correct}?" Then proceed with your reply.`,
+        });
+      }
+      reasoningMessages.push({ role: 'user', content: userMessagePrompt });
 
       // Get output token limit based on tier
       const userTierValidated: UserTier = validateUserTier(userTier);
@@ -412,11 +441,21 @@ export class AdviceGeneratorService {
 
       // Root-cause fix: never yield empty response (LLM sometimes returns empty "response" field)
       const streamFallback = "I'm here. Could you say a bit more so I can respond properly?";
-      const outContent = (finalResponse || fullResponse || '').trim();
-      const contentToYield = outContent.length > 0 ? outContent : streamFallback;
+      let outContent = (finalResponse || fullResponse || '').trim();
       if (outContent.length === 0) {
         console.warn('[AdviceGenerator STREAM] LLM returned empty response; using fallback. fullResponse length:', fullResponse?.length ?? 0);
+        outContent = streamFallback;
       }
+      // Typo guardrail enforcement: if we detected a typo but the model didn't ask, prepend confirmation
+      if (detectedTypoStream1 && outContent) {
+        const lower = outContent.toLowerCase();
+        const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypoStream1.correct.toLowerCase());
+        if (!hasConfirm) {
+          outContent = `Just to confirm, did you mean ${detectedTypoStream1.correct}? ${outContent}`;
+          console.log(`[Typo guardrail] Stream1 prepend confirmation`);
+        }
+      }
+      const contentToYield = outContent;
 
       // Yield final reasoning if we got more
       if (finalReasoning && finalReasoning !== lastReasoningExtracted) {
@@ -477,11 +516,16 @@ export class AdviceGeneratorService {
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
         })),
-        {
-          role: 'user',
-          content: userMessagePrompt,
-        },
       );
+      const detectedTypoStream2 = decisionIntelligenceMode ? detectTypo(userMessage) : null;
+      if (detectedTypoStream2) {
+        console.log(`[Typo guardrail] Stream2 detected "${detectedTypoStream2.typo}" → "${detectedTypoStream2.correct}"`);
+        reasoningMessages.push({
+          role: 'system',
+          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypoStream2.typo}" which likely means "${detectedTypoStream2.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypoStream2.correct}?" Then proceed with your reply.`,
+        });
+      }
+      reasoningMessages.push({ role: 'user', content: userMessagePrompt });
 
       let fullResponse = '';
       let lastReasoningExtracted = '';
@@ -579,12 +623,20 @@ export class AdviceGeneratorService {
       }
 
       const streamFallbackOld = "I'm here. Could you say a bit more so I can respond properly?";
-      const outContentOld = (finalResponse || fullResponse || '').trim();
-      const contentToYieldOld = outContentOld.length > 0 ? outContentOld : streamFallbackOld;
+      let outContentOld = (finalResponse || fullResponse || '').trim();
       if (outContentOld.length === 0) {
         console.warn('[AdviceGenerator Stream OLD] LLM returned empty response; using fallback.');
+        outContentOld = streamFallbackOld;
       }
-      yield { type: 'done', content: contentToYieldOld };
+      if (detectedTypoStream2 && outContentOld) {
+        const lower = outContentOld.toLowerCase();
+        const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypoStream2.correct.toLowerCase());
+        if (!hasConfirm) {
+          outContentOld = `Just to confirm, did you mean ${detectedTypoStream2.correct}? ${outContentOld}`;
+          console.log(`[Typo guardrail] Stream2 prepend confirmation`);
+        }
+      }
+      yield { type: 'done', content: outContentOld };
     } catch (error) {
       console.error('Error in streaming advice generation:', error);
       yield { type: 'done', content: `Error: ${error.message}` };
