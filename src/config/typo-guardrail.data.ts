@@ -5,6 +5,7 @@
  */
 export const COMMON_TYPOS: Record<string, string> = {
   protopese: 'propose',
+  protopsete: 'propose',
   propse: 'propose',
   propos: 'propose',
   decsion: 'decision',

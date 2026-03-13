@@ -109,7 +109,7 @@ export class AdviceGeneratorService {
         console.log(`[Typo guardrail] Detected "${detectedTypo.typo}" → "${detectedTypo.correct}"`);
         reasoningMessages.push({
           role: 'system',
-          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypo.typo}" which likely means "${detectedTypo.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypo.correct}?" Then proceed with your reply.`,
+          content: `GUARDRAIL: The user's message contains a possible typo ("${detectedTypo.typo}" → "${detectedTypo.correct}"). Your response must be ONLY: "Just to confirm, did you mean ${detectedTypo.correct}?" Do not add anything else. Do not ask about logic or emotion. Do not start the process. Wait for the user to confirm in their next message.`,
         });
       }
 
@@ -249,13 +249,20 @@ export class AdviceGeneratorService {
         }
       }
 
-      // Typo guardrail enforcement: if we detected a typo but the model didn't ask for confirmation, prepend it
+      // Typo guardrail enforcement: when typo detected, return ONLY the confirmation—no process question in same message
       if (detectedTypo && cleanResponse) {
+        const confirmationOnly = `Just to confirm, did you mean ${detectedTypo.correct}?`;
         const lower = cleanResponse.toLowerCase();
         const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypo.correct.toLowerCase());
         if (!hasConfirm) {
-          cleanResponse = `Just to confirm, did you mean ${detectedTypo.correct}? ${cleanResponse}`;
-          console.log(`[Typo guardrail] Prepend confirmation (model did not ask)`);
+          cleanResponse = confirmationOnly;
+          console.log(`[Typo guardrail] Response replaced with confirmation only (model did not ask)`);
+        } else {
+          // Model asked but may have added process content; keep only the confirmation sentence
+          if (cleanResponse.length > confirmationOnly.length + 5 || /logic|emotion|feeling|first,|what activated/i.test(cleanResponse)) {
+            cleanResponse = confirmationOnly;
+            console.log(`[Typo guardrail] Response trimmed to confirmation only (model added process content)`);
+          }
         }
       }
 
@@ -352,7 +359,7 @@ export class AdviceGeneratorService {
         console.log(`[Typo guardrail] Stream1 detected "${detectedTypoStream1.typo}" → "${detectedTypoStream1.correct}"`);
         reasoningMessages.push({
           role: 'system',
-          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypoStream1.typo}" which likely means "${detectedTypoStream1.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypoStream1.correct}?" Then proceed with your reply.`,
+          content: `GUARDRAIL: The user's message contains a possible typo ("${detectedTypoStream1.typo}" → "${detectedTypoStream1.correct}"). Your response must be ONLY: "Just to confirm, did you mean ${detectedTypoStream1.correct}?" Do not add anything else. Do not ask about logic or emotion. Do not start the process. Wait for the user to confirm in their next message.`,
         });
       }
       reasoningMessages.push({ role: 'user', content: userMessagePrompt });
@@ -446,13 +453,14 @@ export class AdviceGeneratorService {
         console.warn('[AdviceGenerator STREAM] LLM returned empty response; using fallback. fullResponse length:', fullResponse?.length ?? 0);
         outContent = streamFallback;
       }
-      // Typo guardrail enforcement: if we detected a typo but the model didn't ask, prepend confirmation
+      // Typo guardrail: when typo detected, return ONLY the confirmation (no process content in same message)
       if (detectedTypoStream1 && outContent) {
+        const confirmationOnly = `Just to confirm, did you mean ${detectedTypoStream1.correct}?`;
         const lower = outContent.toLowerCase();
         const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypoStream1.correct.toLowerCase());
-        if (!hasConfirm) {
-          outContent = `Just to confirm, did you mean ${detectedTypoStream1.correct}? ${outContent}`;
-          console.log(`[Typo guardrail] Stream1 prepend confirmation`);
+        if (!hasConfirm || outContent.length > confirmationOnly.length + 5 || /logic|emotion|feeling|first,|what activated/i.test(outContent)) {
+          outContent = confirmationOnly;
+          console.log(`[Typo guardrail] Stream1: response set to confirmation only`);
         }
       }
       const contentToYield = outContent;
@@ -522,7 +530,7 @@ export class AdviceGeneratorService {
         console.log(`[Typo guardrail] Stream2 detected "${detectedTypoStream2.typo}" → "${detectedTypoStream2.correct}"`);
         reasoningMessages.push({
           role: 'system',
-          content: `GUARDRAIL: The user's message contains a possible typo. They wrote "${detectedTypoStream2.typo}" which likely means "${detectedTypoStream2.correct}". Your response MUST start with a confirmation question: "Just to confirm, did you mean ${detectedTypoStream2.correct}?" Then proceed with your reply.`,
+          content: `GUARDRAIL: The user's message contains a possible typo ("${detectedTypoStream2.typo}" → "${detectedTypoStream2.correct}"). Your response must be ONLY: "Just to confirm, did you mean ${detectedTypoStream2.correct}?" Do not add anything else. Do not ask about logic or emotion. Do not start the process. Wait for the user to confirm in their next message.`,
         });
       }
       reasoningMessages.push({ role: 'user', content: userMessagePrompt });
@@ -629,11 +637,12 @@ export class AdviceGeneratorService {
         outContentOld = streamFallbackOld;
       }
       if (detectedTypoStream2 && outContentOld) {
+        const confirmationOnly = `Just to confirm, did you mean ${detectedTypoStream2.correct}?`;
         const lower = outContentOld.toLowerCase();
         const hasConfirm = (lower.includes('confirm') || lower.includes('did you mean')) && lower.includes(detectedTypoStream2.correct.toLowerCase());
-        if (!hasConfirm) {
-          outContentOld = `Just to confirm, did you mean ${detectedTypoStream2.correct}? ${outContentOld}`;
-          console.log(`[Typo guardrail] Stream2 prepend confirmation`);
+        if (!hasConfirm || outContentOld.length > confirmationOnly.length + 5 || /logic|emotion|feeling|first,|what activated/i.test(outContentOld)) {
+          outContentOld = confirmationOnly;
+          console.log(`[Typo guardrail] Stream2: response set to confirmation only`);
         }
       }
       yield { type: 'done', content: outContentOld };
