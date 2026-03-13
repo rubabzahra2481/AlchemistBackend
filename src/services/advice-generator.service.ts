@@ -18,6 +18,10 @@ import {
 import { GUEST_DECISION_COACH_SYSTEM_PROMPT } from '../knowledge-base/guest-decision-coach.prompt';
 import { GUEST_MAX_OUTPUT_TOKENS } from '../config/guest.config';
 import { detectTypo } from '../config/typo-guardrail.data';
+import {
+  DI_AGENT_RESPONSE_JSON_SCHEMA,
+  useStructuredOutputForModel,
+} from '../config/di-agent-response-schema';
 
 @Injectable()
 export class AdviceGeneratorService {
@@ -146,8 +150,11 @@ export class AdviceGeneratorService {
         reasoningMessages,
         {
           temperature: 0.7,
-          max_tokens: maxOutputTokens, // Full tier limit so both reasoning and response fit (was 600 cap → caused truncation → empty response)
-          response_format: 'json_object', // Force JSON output for OpenAI
+          max_tokens: maxOutputTokens,
+          response_format:
+            decisionIntelligenceMode && useStructuredOutputForModel(selectedLLM)
+              ? DI_AGENT_RESPONSE_JSON_SCHEMA
+              : 'json_object',
         },
       );
 
@@ -221,11 +228,24 @@ export class AdviceGeneratorService {
             jsonResponse.reasoning || 'LLM provided response without structured reasoning';
         }
       } catch (jsonError) {
-        // Fallback: Not JSON - try old format with RESPONSE:/REASONING: markers
-        const hasResponseMarker = fullResponse.includes('RESPONSE:');
-        const hasReasoningMarker = fullResponse.includes('REASONING:');
+        // JSON parse failed: malformed/truncated JSON (e.g. unescaped newlines, trailing comma, cut-off)
+        // causes empty response path and "Could you say a bit more" loop. Try regex extraction first.
+        const jsonLikeResponseMatch = fullResponse.match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        if (jsonLikeResponseMatch && jsonLikeResponseMatch[1]) {
+          cleanResponse = jsonLikeResponseMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+          if (cleanResponse) {
+            const reasoningMatch = fullResponse.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+            if (reasoningMatch && reasoningMatch[1]) {
+              extractedReasoning = reasoningMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+            }
+          }
+        }
+        if (!cleanResponse) {
+          // Fallback: try old format with RESPONSE:/REASONING: markers
+          const hasResponseMarker = fullResponse.includes('RESPONSE:');
+          const hasReasoningMarker = fullResponse.includes('REASONING:');
 
-        if (hasResponseMarker) {
+          if (hasResponseMarker) {
           const responseMatch = fullResponse.match(/RESPONSE:\s*(.+?)(?:\s+REASONING:|$)/s);
           if (responseMatch && responseMatch[1]) {
             cleanResponse = responseMatch[1].trim();
@@ -246,6 +266,7 @@ export class AdviceGeneratorService {
           // Last resort: use raw response
           cleanResponse = fullResponse.trim();
           extractedReasoning = 'LLM did not follow the expected format - reasoning unavailable';
+        }
         }
       }
 
@@ -272,11 +293,18 @@ export class AdviceGeneratorService {
         cleanResponse = this.ensureEndValidatorInResponse(cleanResponse, coreType);
       }
 
-      // Root-cause fix: LLM sometimes returns {"reasoning": "...", "response": ""}. Never return empty.
-      const EMPTY_RESPONSE_FALLBACK = "Could you say a bit more so I can respond properly?";
+      // When response is empty (JSON parse fail, truncated, or "response": ""), use context-aware fallback
+      // so we don't create a "say a bit more" loop when the user already gave a valid short answer.
       if (!cleanResponse || !cleanResponse.trim()) {
-        console.warn('[AdviceGenerator] LLM returned empty response; using fallback. Raw length:', fullResponse?.length ?? 0);
-        cleanResponse = EMPTY_RESPONSE_FALLBACK;
+        const contextFallback = decisionIntelligenceMode ? this.getShortAnswerFallback(userMessage) : null;
+        cleanResponse =
+          contextFallback ||
+          "Could you say a bit more so I can respond properly?";
+        if (contextFallback) {
+          console.warn('[AdviceGenerator] LLM returned empty; used context-aware fallback for short answer.');
+        } else {
+          console.warn('[AdviceGenerator] LLM returned empty response; using generic fallback. Raw length:', fullResponse?.length ?? 0);
+        }
       }
 
       // Note: Don't strip ** markdown as frontend renders it as bold
@@ -378,9 +406,11 @@ export class AdviceGeneratorService {
         max_tokens: maxOutputTokens,
       };
 
-      // Add response_format for OpenAI models
       if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
-        streamOptions.response_format = { type: 'json_object' };
+        streamOptions.response_format =
+          decisionIntelligenceMode && useStructuredOutputForModel(selectedLLM)
+            ? DI_AGENT_RESPONSE_JSON_SCHEMA
+            : { type: 'json_object' };
       }
 
       for await (const chunk of this.llmOrchestrator.generateStream(
@@ -446,12 +476,13 @@ export class AdviceGeneratorService {
         finalResponse = this.ensureEndValidatorInResponse(finalResponse || fullResponse, coreType);
       }
 
-      // Root-cause fix: never yield empty response (LLM sometimes returns empty "response" field)
       const streamFallback = "I'm here. Could you say a bit more so I can respond properly?";
       let outContent = (finalResponse || fullResponse || '').trim();
       if (outContent.length === 0) {
-        console.warn('[AdviceGenerator STREAM] LLM returned empty response; using fallback. fullResponse length:', fullResponse?.length ?? 0);
-        outContent = streamFallback;
+        const contextFallback = decisionIntelligenceMode ? this.getShortAnswerFallback(userMessage) : null;
+        outContent = contextFallback || streamFallback;
+        if (contextFallback) console.warn('[AdviceGenerator STREAM] Empty response; used context-aware fallback.');
+        else console.warn('[AdviceGenerator STREAM] LLM returned empty response; using generic fallback. fullResponse length:', fullResponse?.length ?? 0);
       }
       // Typo guardrail: when typo detected, return ONLY the confirmation (no process content in same message)
       if (detectedTypoStream1 && outContent) {
@@ -551,11 +582,13 @@ export class AdviceGeneratorService {
         max_tokens: maxOutputTokens, // Full tier limit so both reasoning and response fit (was 600 cap → caused truncation → empty response)
       };
       
-      // Add response_format for OpenAI models to force JSON output
       if (selectedLLM.startsWith('gpt-') || selectedLLM.startsWith('o1-')) {
-        streamOptions.response_format = { type: 'json_object' };
+        streamOptions.response_format =
+          decisionIntelligenceMode && useStructuredOutputForModel(selectedLLM)
+            ? DI_AGENT_RESPONSE_JSON_SCHEMA
+            : { type: 'json_object' };
       }
-      
+
       for await (const chunk of this.llmOrchestrator.generateStream(
         selectedLLM,
         reasoningMessages,
@@ -633,8 +666,10 @@ export class AdviceGeneratorService {
       const streamFallbackOld = "I'm here. Could you say a bit more so I can respond properly?";
       let outContentOld = (finalResponse || fullResponse || '').trim();
       if (outContentOld.length === 0) {
-        console.warn('[AdviceGenerator Stream OLD] LLM returned empty response; using fallback.');
-        outContentOld = streamFallbackOld;
+        const contextFallbackOld = decisionIntelligenceMode ? this.getShortAnswerFallback(userMessage) : null;
+        outContentOld = contextFallbackOld || streamFallbackOld;
+        if (contextFallbackOld) console.warn('[AdviceGenerator Stream OLD] Empty response; used context-aware fallback.');
+        else console.warn('[AdviceGenerator Stream OLD] LLM returned empty response; using fallback.');
       }
       if (detectedTypoStream2 && outContentOld) {
         const confirmationOnly = `Just to confirm, did you mean ${detectedTypoStream2.correct}?`;
@@ -767,6 +802,26 @@ Example of CORRECT output: Hello! What brings you here today?`;
   private getDecisionCoreType(ednaProfile?: EdnaProfileFull | null): DecisionCoreType {
     const raw = ednaProfile?.layers?.layer1?.coreType?.toLowerCase() || 'mixed';
     return raw === 'architect' || raw === 'alchemist' ? raw : 'mixed';
+  }
+
+  /**
+   * When LLM returns empty, avoid "say a bit more" loop: if user gave a short valid step answer,
+   * return a step-appropriate continuation. Otherwise null (caller uses generic fallback).
+   */
+  private getShortAnswerFallback(userMessage: string): string | null {
+    if (!userMessage || typeof userMessage !== 'string') return null;
+    const t = userMessage.trim().toLowerCase();
+    if (t.length > 120) return null;
+    if (/\b(logical|logic|it was logic|my first instinct was logic|first instinct was logic)\b/.test(t)) {
+      return "Got it—logic first. Give me all the logical data you've got: facts, options, pros and cons.";
+    }
+    if (/\b(emotional|emotion|it was emotion|my first instinct was emotion|first instinct was emotion|feeling|felt)\b/.test(t)) {
+      return "Got it—emotion first. How does this decision feel to you? On a scale of 1 to 10, where 1 is hardly any emotional pull and 10 is very strong gut feeling, where would you put it?";
+    }
+    if (/^\d{1,2}$/.test(t) && parseInt(t, 10) >= 1 && parseInt(t, 10) <= 10) {
+      return "Thanks, that helps. So we have the logic and the feeling—let me play that back and then we can see if you're ready to decide.";
+    }
+    return null;
   }
 
   /**

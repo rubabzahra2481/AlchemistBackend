@@ -31,8 +31,10 @@ export class OpenAIProvider implements ILLMProvider {
         top_p: options.top_p,
       };
 
-      // Add JSON mode if explicitly requested
-      if (options.response_format === 'json_object') {
+      // Structured Outputs (json_schema) or JSON mode
+      if (options.response_format && typeof options.response_format === 'object' && options.response_format.type === 'json_schema') {
+        requestParams.response_format = options.response_format;
+      } else if (options.response_format === 'json_object') {
         requestParams.response_format = { type: 'json_object' };
       }
 
@@ -64,8 +66,10 @@ export class OpenAIProvider implements ILLMProvider {
         stream: true,
       };
 
-      // Add JSON mode if explicitly requested (note: streaming with JSON mode may not work perfectly)
-      if (options.response_format === 'json_object') {
+      // Structured Outputs or JSON mode
+      if (options.response_format && typeof options.response_format === 'object' && options.response_format.type === 'json_schema') {
+        requestParams.response_format = options.response_format;
+      } else if (options.response_format === 'json_object') {
         requestParams.response_format = { type: 'json_object' };
       }
 
