@@ -1,9 +1,10 @@
 import {
   CanActivate,
   ExecutionContext,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
-  TooManyRequestsException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
@@ -45,10 +46,13 @@ export class FaqChatRateLimitGuard implements CanActivate {
     arr = arr.filter((t) => now - t < windowMs);
     if (arr.length >= max) {
       this.logger.warn(`FAQ rate limit exceeded for ${ip}`);
-      throw new TooManyRequestsException({
-        error: 'Too many FAQ requests. Please wait a moment and try again.',
-        retryAfterSec: Math.ceil(windowMs / 1000),
-      });
+      throw new HttpException(
+        {
+          error: 'Too many FAQ requests. Please wait a moment and try again.',
+          retryAfterSec: Math.ceil(windowMs / 1000),
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
     arr.push(now);
     this.hits.set(ip, arr);
