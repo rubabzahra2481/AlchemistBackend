@@ -28,6 +28,7 @@ import { FaqKnowledgeLoaderService } from './faq-chatbot/faq-knowledge-loader.se
 import { FaqRetrievalService } from './faq-chatbot/faq-retrieval.service';
 import { FaqChatCacheService } from './faq-chatbot/faq-chat-cache.service';
 import { FaqChatRateLimitGuard } from './faq-chatbot/faq-chat-rate-limit.guard';
+import { ComplianceModule } from './compliance/compliance.module';
 
 /**
  * App Module - NO DATABASE REQUIRED
@@ -40,12 +41,14 @@ import { FaqChatRateLimitGuard } from './faq-chatbot/faq-chat-rate-limit.guard';
  * - Processes messages with LLMs (OpenAI, Claude, etc.)
  * - Calls Munawar's backend APIs for data
  * - FAQ chatbot (`/faq-chat`) from `faq-chatbot-knowledge/` — separate from DI agent
+ * - Compliance (`/api/compliance`, `/api/contracts`, `/api/webhooks`) — Amiqus + DocuSeal; isolated module
  */
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ComplianceModule,
     // NO DatabaseModule - all data goes to Munawar's backend
   ],
   controllers: [AppController, ChatController, CreditsController, FaqChatController],

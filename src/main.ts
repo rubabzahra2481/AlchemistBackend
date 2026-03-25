@@ -93,6 +93,9 @@ async function bootstrap() {
       .setVersion('1.0')
       .addTag('chat', 'Chat endpoints for interacting with the advisor agent')
       .addTag('faq-chat', 'Standalone FAQ chatbot (not the DI agent)')
+      .addTag('compliance', 'Amiqus KYC / compliance init')
+      .addTag('compliance-contracts', 'DocuSeal contract submissions')
+      .addTag('compliance-webhooks', 'Amiqus & DocuSeal webhooks')
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
