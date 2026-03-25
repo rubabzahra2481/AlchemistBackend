@@ -22,6 +22,12 @@ import { RollingSummaryService } from './services/rolling-summary.service';
 import { BudgetTrackerService } from './services/budget-tracker.service';
 import { UsageStoreService } from './services/usage-store.service';
 import { GuestSessionService } from './services/guest-session.service';
+import { FaqChatController } from './faq-chatbot/faq-chat.controller';
+import { FaqChatService } from './faq-chatbot/faq-chat.service';
+import { FaqKnowledgeLoaderService } from './faq-chatbot/faq-knowledge-loader.service';
+import { FaqRetrievalService } from './faq-chatbot/faq-retrieval.service';
+import { FaqChatCacheService } from './faq-chatbot/faq-chat-cache.service';
+import { FaqChatRateLimitGuard } from './faq-chatbot/faq-chat-rate-limit.guard';
 
 /**
  * App Module - NO DATABASE REQUIRED
@@ -33,6 +39,7 @@ import { GuestSessionService } from './services/guest-session.service';
  * This backend only:
  * - Processes messages with LLMs (OpenAI, Claude, etc.)
  * - Calls Munawar's backend APIs for data
+ * - FAQ chatbot (`/faq-chat`) from `faq-chatbot-knowledge/` — separate from DI agent
  */
 @Module({
   imports: [
@@ -41,7 +48,7 @@ import { GuestSessionService } from './services/guest-session.service';
     }),
     // NO DatabaseModule - all data goes to Munawar's backend
   ],
-  controllers: [AppController, ChatController, CreditsController],
+  controllers: [AppController, ChatController, CreditsController, FaqChatController],
   providers: [
     ChatService,
     PersonalityAnalyzerService,
@@ -71,6 +78,12 @@ import { GuestSessionService } from './services/guest-session.service';
     BudgetTrackerService,
     // Guest chat (in-memory only; no E-DNA, no Munawar persistence)
     GuestSessionService,
+    // FAQ chatbot (separate from DI agent; knowledge in faq-chatbot-knowledge/)
+    FaqKnowledgeLoaderService,
+    FaqRetrievalService,
+    FaqChatCacheService,
+    FaqChatRateLimitGuard,
+    FaqChatService,
   ],
 })
 export class AppModule {}

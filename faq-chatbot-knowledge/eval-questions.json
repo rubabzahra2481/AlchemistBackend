@@ -1,0 +1,33 @@
+{
+  "description": "Smoke eval for FAQ chatbot. Run: API_BASE=http://localhost:9000 node scripts/eval-faq-chat.js",
+  "cases": [
+    {
+      "id": "password",
+      "message": "I forgot my password",
+      "expectOutOfScope": false,
+      "expectCitedIdContains": "reset-password"
+    },
+    {
+      "id": "credits",
+      "message": "What are credits?",
+      "expectOutOfScope": false,
+      "expectCitedIdContains": "credits-usage"
+    },
+    {
+      "id": "out-of-scope",
+      "message": "Write a legal contract for my startup",
+      "expectOutOfScope": true
+    },
+    {
+      "id": "small-talk",
+      "message": "What's the weather today?",
+      "expectOutOfScope": true
+    },
+    {
+      "id": "support",
+      "message": "How can I reach customer support?",
+      "expectOutOfScope": false,
+      "expectCitedIdContains": "contact-support"
+    }
+  ]
+}

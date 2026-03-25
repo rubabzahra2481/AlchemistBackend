@@ -92,6 +92,7 @@ async function bootstrap() {
       .setDescription('AI-powered agent with E-DNA personality analysis and psychological frameworks')
       .setVersion('1.0')
       .addTag('chat', 'Chat endpoints for interacting with the advisor agent')
+      .addTag('faq-chat', 'Standalone FAQ chatbot (not the DI agent)')
       .build();
 
     const document = SwaggerModule.createDocument(app, config);

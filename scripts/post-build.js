@@ -14,4 +14,14 @@ const dest = path.join(publicDir, 'index.html');
 fs.copyFileSync(source, dest);
 console.log('✅ Copied index.html to dist/public/');
 
+// FAQ chatbot knowledge (so start:prod from backend/ can resolve dist/faq-chatbot-knowledge/faqs.json)
+const faqSrc = path.join(__dirname, '..', 'faq-chatbot-knowledge');
+const faqDest = path.join(__dirname, '..', 'dist', 'faq-chatbot-knowledge');
+if (fs.existsSync(faqSrc)) {
+  fs.mkdirSync(faqDest, { recursive: true });
+  for (const name of fs.readdirSync(faqSrc)) {
+    fs.copyFileSync(path.join(faqSrc, name), path.join(faqDest, name));
+  }
+  console.log('✅ Copied faq-chatbot-knowledge to dist/faq-chatbot-knowledge/');
+}
 

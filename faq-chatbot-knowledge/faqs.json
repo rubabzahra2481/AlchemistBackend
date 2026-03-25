@@ -1,0 +1,67 @@
+{
+  "version": "1",
+  "chatbotTitle": "Brand Scaling Help",
+  "scopeDescription": "Brand Scaling app basics, accounts, subscriptions, and getting started—not personal coaching or the Decision Intelligence agent.",
+  "faqs": [
+    {
+      "id": "what-is-app",
+      "category": "General",
+      "question": "What is this app for?",
+      "answer": "This app helps you work through decisions using Brand Scaling’s methodology and tools. It is separate from general-purpose chat: it focuses on structured decision support and your profile (e‑DNA) when you use those features."
+    },
+    {
+      "id": "create-account",
+      "category": "Account",
+      "question": "How do I create an account?",
+      "answer": "Use the Sign up option on the login screen, enter the details asked for, and confirm your email if prompted. If you already have an account, use Log in instead."
+    },
+    {
+      "id": "reset-password",
+      "category": "Account",
+      "question": "I forgot my password. What do I do?",
+      "answer": "On the login screen, tap Forgot password (or similar), enter the email linked to your account, and follow the reset link sent to your inbox. Check spam if you do not see it within a few minutes."
+    },
+    {
+      "id": "change-email",
+      "category": "Account",
+      "question": "Can I change my email address?",
+      "answer": "Email changes are usually done in Account or Profile settings in the app, or through support if your product uses a managed flow. If you do not see an option, contact support with your old and new email."
+    },
+    {
+      "id": "subscription-tiers",
+      "category": "Billing",
+      "question": "What subscription tiers exist?",
+      "answer": "Plans differ by features and usage limits (for example credits for the AI features). Open Subscription or Plans in the app to see current tiers, prices, and what each includes."
+    },
+    {
+      "id": "cancel-subscription",
+      "category": "Billing",
+      "question": "How do I cancel my subscription?",
+      "answer": "Subscriptions purchased through the App Store are managed in Apple Settings → your Apple ID → Subscriptions. Cancel there to stop renewal; access may continue until the end of the paid period."
+    },
+    {
+      "id": "credits-usage",
+      "category": "Billing",
+      "question": "What are credits?",
+      "answer": "Credits measure how much you can use certain AI features in a billing period. Usage depends on message length and model. Your app shows remaining credits and resets according to your plan."
+    },
+    {
+      "id": "contact-support",
+      "category": "Support",
+      "question": "How do I contact support?",
+      "answer": "Use the in-app Help or Support link if available, or email the support address shown on the website or in the app store listing. Include your account email and a short description of the issue."
+    },
+    {
+      "id": "data-privacy",
+      "category": "Privacy",
+      "question": "Is my data private?",
+      "answer": "Review the Privacy Policy linked from the app or website for what is collected, how it is used, and your rights. For account-specific questions, contact support."
+    },
+    {
+      "id": "offline-use",
+      "category": "General",
+      "question": "Does the app work offline?",
+      "answer": "Most features need an internet connection. Offline support, if any, is limited to what the app explicitly documents (for example cached content)."
+    }
+  ]
+}

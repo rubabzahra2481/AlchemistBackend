@@ -22,7 +22,9 @@
     "qa:evaluate": "ts-node scripts/evaluate-quality.ts",
     "qa:analyze": "ts-node scripts/analyze-patterns.ts",
     "qa:full": "npm run qa:generate && npm run qa:evaluate && npm run qa:analyze",
-    "test:startup": "ts-node scripts/test-startup.ts"
+    "test:startup": "ts-node scripts/test-startup.ts",
+    "eval:faq": "node scripts/eval-faq-chat.js",
+    "test:faq-matrix": "node scripts/faq-full-matrix.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",
