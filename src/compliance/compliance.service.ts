@@ -82,6 +82,26 @@ export class ComplianceService {
     throw new InternalServerErrorException(`${provider} request failed`);
   }
 
+  private parseDocuSealErrorMessage(data: unknown): string {
+    if (!data) return '';
+    if (typeof data === 'string') return data;
+    if (typeof data === 'object') {
+      const maybe = (data as { error?: unknown; message?: unknown }).error ?? (data as { message?: unknown }).message;
+      if (typeof maybe === 'string') return maybe;
+      try {
+        return JSON.stringify(data);
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  }
+
+  private isDocuSealUnknownFieldError(data: unknown): boolean {
+    const msg = this.parseDocuSealErrorMessage(data).toLowerCase();
+    return msg.includes('unknown field');
+  }
+
   /**
    * Create Amiqus client, then record with photo ID + DBS-style step; return perform_url.
    */
@@ -181,6 +201,40 @@ export class ComplianceService {
     const templateId = this.templateIdForContract(dto.contractType);
     const today = this.formatTodayDdMmYyyy();
 
+    // IMPORTANT: DocuSeal field names must match template labels exactly.
+    // HSPSLA (template 1) and TENANTS (template 2) use different field names.
+    const hspFields =
+      dto.contractType === 'TENANTS'
+        ? [
+            { name: 'HSP Financial Contact Name', default_value: dto.hspName },
+            { name: 'HSP Financial Contact Address', default_value: dto.registeredAddress },
+            { name: 'HSP Financial Contact Email', default_value: dto.hspEmail },
+            { name: 'HSP Signatory Name', default_value: dto.hspName },
+            {
+              name: 'HSP Signatory Date',
+              default_value: today,
+              preferences: { format: 'DD/MM/YYYY' },
+            },
+          ]
+        : [
+            { name: 'Date', default_value: today, preferences: { format: 'DD/MM/YYYY' } },
+            { name: 'Company Name', default_value: dto.companyName },
+            { name: 'Registered Office Address', default_value: dto.registeredAddress },
+            { name: 'Company Reg Number', default_value: dto.companyRegNumber },
+            { name: 'HSP Property Address', default_value: dto.registeredAddress },
+            { name: 'HSP Director Name', default_value: dto.hspName },
+            { name: 'Date', default_value: today, preferences: { format: 'DD/MM/YYYY' } },
+          ];
+
+    const pmaFields =
+      dto.contractType === 'HSPSLA'
+        ? [
+            { name: 'PMA Director Name', default_value: PMA_NAME },
+            { name: 'PMA Job Title', default_value: 'Partnering Managing Agent' },
+            { name: 'PMA Signatory Date', default_value: today, preferences: { format: 'DD/MM/YYYY' } },
+          ]
+        : [];
+
     const payload = {
       template_id: templateId,
       send_email: false,
@@ -190,22 +244,14 @@ export class ComplianceService {
           email: dto.hspEmail,
           name: dto.hspName,
           send_email: false,
-          fields: [
-            { name: 'Company Name', default_value: dto.companyName },
-            { name: 'Company Reg Number', default_value: dto.companyRegNumber },
-            { name: 'Registered Office Address', default_value: dto.registeredAddress },
-            {
-              name: 'Date',
-              default_value: today,
-              preferences: { format: 'DD/MM/YYYY' },
-            },
-          ],
+          fields: hspFields,
         },
         {
           role: 'PMA',
           email: PMA_EMAIL,
           name: PMA_NAME,
           send_email: false,
+          fields: pmaFields,
         },
       ],
     };
@@ -222,7 +268,61 @@ export class ComplianceService {
       });
 
       if (res.status < 200 || res.status >= 300) {
-        this.logger.warn(`DocuSeal create submission failed: ${res.status} ${JSON.stringify(res.data)}`);
+        const canFallback = this.isDocuSealUnknownFieldError(res.data);
+
+        if (canFallback) {
+          this.logger.warn(
+            `DocuSeal ${dto.contractType} prefill field mismatch detected (unknown field). Retrying without prefill fields.`,
+          );
+
+          const fallbackPayload = {
+            ...payload,
+            submitters: payload.submitters.map((s) => ({ ...s, fields: [] as Array<unknown> })),
+          };
+
+          const fallbackRes = await axios.post(url, fallbackPayload, {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Auth-Token': apiKey,
+            },
+            validateStatus: () => true,
+          });
+
+          if (fallbackRes.status >= 200 && fallbackRes.status < 300) {
+            const fallbackSubmitters = fallbackRes.data as Array<{
+              slug?: string;
+              role?: string;
+              submission_id?: number;
+            }>;
+            if (!Array.isArray(fallbackSubmitters)) {
+              throw new BadGatewayException('DocuSeal returned an unexpected response');
+            }
+            const fallbackHsp = fallbackSubmitters.find((s) => s.role === 'HSP');
+            const fallbackSlug = fallbackHsp?.slug;
+            if (!fallbackSlug) {
+              throw new BadGatewayException('DocuSeal response missing HSP submitter slug');
+            }
+            const fallbackSubmissionId =
+              fallbackHsp?.submission_id ?? fallbackSubmitters[0]?.submission_id;
+            this.logger.log(
+              `DocuSeal fallback submission created templateId=${templateId} slug=${fallbackSlug} submissionId=${fallbackSubmissionId}`,
+            );
+            return { slug: fallbackSlug, submissionId: fallbackSubmissionId };
+          }
+
+          this.logger.warn(
+            `DocuSeal fallback failed: ${fallbackRes.status} ${JSON.stringify(fallbackRes.data)}`,
+          );
+          throw new BadGatewayException({
+            message: 'DocuSeal create submission failed',
+            status: fallbackRes.status,
+            details: fallbackRes.data,
+          });
+        }
+
+        this.logger.warn(
+          `DocuSeal create submission failed: ${res.status} ${JSON.stringify(res.data)}`,
+        );
         throw new BadGatewayException({
           message: 'DocuSeal create submission failed',
           status: res.status,
