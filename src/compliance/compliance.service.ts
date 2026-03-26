@@ -45,6 +45,41 @@ export class ComplianceService {
     return { apiKey, baseUrl };
   }
 
+  private partnerBackendBaseUrl(): string | null {
+    const v = this.config.get<string>('PARTNER_BACKEND_URL')?.trim();
+    if (!v) return null;
+    return v.replace(/\/$/, '');
+  }
+
+  /**
+   * Non-blocking mirror to partner backend. Never throws.
+   */
+  private async postToPartner(path: string, payload: Record<string, unknown>, tag: string): Promise<void> {
+    const base = this.partnerBackendBaseUrl();
+    if (!base) {
+      this.logger.warn(`[PartnerSync:${tag}] PARTNER_BACKEND_URL not configured; skipping`);
+      return;
+    }
+
+    const url = `${base}${path}`;
+    try {
+      const res = await axios.post(url, payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000,
+        validateStatus: () => true,
+      });
+      if (res.status >= 200 && res.status < 300) {
+        this.logger.log(`[PartnerSync:${tag}] ok status=${res.status} url=${url}`);
+      } else {
+        this.logger.warn(
+          `[PartnerSync:${tag}] failed status=${res.status} url=${url} body=${JSON.stringify(res.data).slice(0, 500)}`,
+        );
+      }
+    } catch (e: any) {
+      this.logger.warn(`[PartnerSync:${tag}] error url=${url} message=${e?.message}`);
+    }
+  }
+
   private templateIdForContract(contractType: 'HSPSLA' | 'TENANTS'): number {
     const envKey =
       contractType === 'HSPSLA' ? 'HSPSLA_TEMPLATE_ID' : 'TENANTS_TEMPLATE_ID';
@@ -185,6 +220,15 @@ export class ComplianceService {
         throw new BadGatewayException('Amiqus create record returned an unexpected response');
       }
 
+      await this.postToPartner(
+        '/api/internal/compliance/link-record',
+        {
+          email: dto.email,
+          amiqus_record_id: String(recordId),
+        },
+        'amiqus-link-record',
+      );
+
       this.logger.log(`Amiqus record created recordId=${recordId} clientId=${clientId}`);
       return { performUrl, recordId, clientId };
     } catch (e) {
@@ -307,6 +351,25 @@ export class ComplianceService {
             this.logger.log(
               `DocuSeal fallback submission created templateId=${templateId} slug=${fallbackSlug} submissionId=${fallbackSubmissionId}`,
             );
+            if (fallbackSubmissionId != null) {
+              await this.postToPartner(
+                '/api/internal/compliance/link-record',
+                dto.contractType === 'HSPSLA'
+                  ? {
+                      email: dto.hspEmail,
+                      hspsla_submission_id: String(fallbackSubmissionId),
+                    }
+                  : {
+                      email: dto.hspEmail,
+                      tenants_sla_submission_id: String(fallbackSubmissionId),
+                    },
+                'docuseal-link-record-fallback',
+              );
+            } else {
+              this.logger.warn(
+                '[PartnerSync:docuseal-link-record-fallback] missing submissionId, skipping partner link',
+              );
+            }
             return { slug: fallbackSlug, submissionId: fallbackSubmissionId };
           }
 
@@ -349,6 +412,23 @@ export class ComplianceService {
       }
 
       const submissionId = hsp?.submission_id ?? submitters[0]?.submission_id;
+      if (submissionId != null) {
+        await this.postToPartner(
+          '/api/internal/compliance/link-record',
+          dto.contractType === 'HSPSLA'
+            ? {
+                email: dto.hspEmail,
+                hspsla_submission_id: String(submissionId),
+              }
+            : {
+                email: dto.hspEmail,
+                tenants_sla_submission_id: String(submissionId),
+              },
+          'docuseal-link-record',
+        );
+      } else {
+        this.logger.warn('[PartnerSync:docuseal-link-record] missing submissionId, skipping partner link');
+      }
       this.logger.log(`DocuSeal submission created templateId=${templateId} slug=${slug} submissionId=${submissionId}`);
       return { slug, submissionId };
     } catch (e) {
@@ -367,8 +447,14 @@ export class ComplianceService {
     this.logger.log(`Amiqus webhook recordId=${recordId ?? 'unknown'} status=${status ?? 'unknown'}`);
 
     if (status?.toLowerCase() === 'completed' && recordId != null) {
-      this.logger.log(`Amiqus record ${recordId} completed — applying partner KYC/DBS placeholder update`);
-      this.placeholderUpdatePartnerKycDbsCompleted(recordId);
+      await this.postToPartner(
+        '/api/internal/compliance/update-status',
+        {
+          amiqus_record_id: String(recordId),
+          status: 'completed',
+        },
+        'amiqus-webhook-update-status',
+      );
     }
 
     return { received: true, recordId, status };
@@ -394,17 +480,14 @@ export class ComplianceService {
     }
 
     if (submissionId != null && templateId != null) {
-      const hspsla = this.parseEnvTemplateId('HSPSLA_TEMPLATE_ID');
-      const tenants = this.parseEnvTemplateId('TENANTS_TEMPLATE_ID');
-      if (templateId === hspsla) {
-        this.placeholderUpdatePartnerContractSigned(submissionId, templateId, 'hspsla_signed');
-      } else if (templateId === tenants) {
-        this.placeholderUpdatePartnerContractSigned(submissionId, templateId, 'tenants_sla_signed');
-      } else {
-        this.logger.warn(
-          `DocuSeal template ${templateId} does not match HSPSLA_TEMPLATE_ID or TENANTS_TEMPLATE_ID — no contract flag placeholder`,
-        );
-      }
+      await this.postToPartner(
+        '/api/internal/compliance/update-status',
+        {
+          submission_id: submissionId,
+          template_id: templateId,
+        },
+        'docuseal-webhook-update-status',
+      );
     }
 
     return { received: true, submissionId, templateId };
@@ -493,21 +576,4 @@ export class ComplianceService {
     return undefined;
   }
 
-  /** Replace with Munawar DB / repository when available */
-  private placeholderUpdatePartnerKycDbsCompleted(recordId: number): void {
-    this.logger.log(
-      `[PLACEHOLDER] Would update partner record: kyc_status='completed', dbs_status='completed' (amiqus_record_id=${recordId})`,
-    );
-  }
-
-  /** Replace with Munawar DB / repository when available */
-  private placeholderUpdatePartnerContractSigned(
-    submissionId: number,
-    templateId: number,
-    flag: 'hspsla_signed' | 'tenants_sla_signed',
-  ): void {
-    this.logger.log(
-      `[PLACEHOLDER] Would update partner record: contract flag '${flag}' (docuseal_submission_id=${submissionId}, template_id=${templateId})`,
-    );
-  }
 }
