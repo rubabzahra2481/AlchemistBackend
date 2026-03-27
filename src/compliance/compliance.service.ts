@@ -14,10 +14,10 @@ const AMIQUS_BASE = 'https://id.amiqus.co/api/v2';
 const PMA_EMAIL = 'admin@allianzhousing.co.uk';
 const PMA_NAME = 'Allianz Housing';
 
-/** Amiqus API step types (see Amiqus ID API). Identity verification + UK basic disclosure / criminal check. */
+/** Amiqus API step types (see Amiqus ID API docs). */
 const AMIQUS_STEP_PHOTO_ID = 'check.photo_id';
-/** Basic DBS step as specified in the developer build guide. Override via AMIQUS_DBS_STEP_TYPE if needed. */
-const AMIQUS_STEP_DBS_DEFAULT = 'dbs_basic';
+/** Criminal record step name per Amiqus create-record examples (`check.criminal` is not the documented type). */
+const AMIQUS_STEP_CRIMINAL_DEFAULT = 'check.criminal_record';
 
 @Injectable()
 export class ComplianceService {
@@ -144,8 +144,20 @@ export class ComplianceService {
     const token = this.requireAmiqusKey();
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-    const dbsStepType =
-      this.config.get<string>('AMIQUS_DBS_STEP_TYPE')?.trim() || AMIQUS_STEP_DBS_DEFAULT;
+    const criminalStepType =
+      this.config.get<string>('AMIQUS_DBS_STEP_TYPE')?.trim() || AMIQUS_STEP_CRIMINAL_DEFAULT;
+    const photoReportType =
+      this.config.get<string>('AMIQUS_PHOTO_ID_REPORT_TYPE')?.trim() || 'biometric';
+    const criminalRegion =
+      this.config.get<string>('AMIQUS_CRIMINAL_RECORD_REGION')?.trim() || 'england';
+    const criminalCheckType =
+      this.config.get<string>('AMIQUS_CRIMINAL_RECORD_TYPE')?.trim() || 'standard';
+    const recordClientMessage = this.config.get<string>('AMIQUS_RECORD_CLIENT_MESSAGE')?.trim();
+    const reminderRaw = this.config.get<string>('AMIQUS_RECORD_REMINDER')?.trim().toLowerCase();
+    const recordReminder =
+      reminderRaw === undefined || reminderRaw === ''
+        ? true
+        : reminderRaw === 'true' || reminderRaw === '1' || reminderRaw === 'yes';
 
     try {
       const clientRes = await axios.post(
@@ -176,23 +188,31 @@ export class ComplianceService {
         throw new BadGatewayException('Amiqus create client returned an unexpected response');
       }
 
-      const recordBody = {
-        client: clientId,
-        steps: [
-          {
-            type: AMIQUS_STEP_PHOTO_ID,
-            preferences: {
-              report_type: 'standard',
-              docs: ['passport', 'driving_licence', 'national_id'],
-            },
-          },
-          {
-            type: dbsStepType,
-            preferences: {},
-          },
-        ],
-        notification: 'email',
+      const photoStep = {
+        type: AMIQUS_STEP_PHOTO_ID,
+        preferences: { report_type: photoReportType },
       };
+
+      const criminalStep =
+        criminalStepType === AMIQUS_STEP_CRIMINAL_DEFAULT
+          ? {
+              type: criminalStepType,
+              preferences: {
+                region: criminalRegion,
+                type: criminalCheckType,
+              },
+            }
+          : { type: criminalStepType };
+
+      const recordBody: Record<string, unknown> = {
+        client: clientId,
+        steps: [photoStep, criminalStep],
+        notification: 'email',
+        reminder: recordReminder,
+      };
+      if (recordClientMessage) {
+        recordBody.message = recordClientMessage;
+      }
 
       const recordRes = await axios.post(`${AMIQUS_BASE}/records`, recordBody, {
         headers,
