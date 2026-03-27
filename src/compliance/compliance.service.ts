@@ -16,8 +16,8 @@ const PMA_NAME = 'Allianz Housing';
 
 /** Amiqus API step types (see Amiqus ID API). Identity verification + UK basic disclosure / criminal check. */
 const AMIQUS_STEP_PHOTO_ID = 'check.photo_id';
-/** Default DBS-basic style step; override via AMIQUS_DBS_STEP_TYPE if your team uses a different preset. */
-const AMIQUS_STEP_DBS_DEFAULT = 'check.criminal';
+/** Basic DBS step as specified in the developer build guide. Override via AMIQUS_DBS_STEP_TYPE if needed. */
+const AMIQUS_STEP_DBS_DEFAULT = 'dbs_basic';
 
 @Injectable()
 export class ComplianceService {
