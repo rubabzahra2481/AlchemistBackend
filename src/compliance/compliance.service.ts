@@ -137,17 +137,34 @@ export class ComplianceService {
     return msg.includes('unknown field');
   }
 
+  /** Photo ID preferences: many teams require `standard` + `docs`; `biometric` is a separate product line in Amiqus. */
+  private amiqusPhotoIdPreferences(reportType: string): Record<string, unknown> {
+    const t = reportType.trim().toLowerCase();
+    if (t === 'biometric') {
+      return { report_type: 'biometric' };
+    }
+    return {
+      report_type: 'standard',
+      docs: ['passport', 'driving_licence', 'national_id'],
+    };
+  }
+
   /**
-   * Create Amiqus client, then record with photo ID + DBS-style step; return perform_url.
+   * Create Amiqus client, then record (photo ID; optional criminal step); return perform_url.
    */
   async initAmiqus(dto: InitAmiqusDto): Promise<{ performUrl: string; recordId: number; clientId: number }> {
     const token = this.requireAmiqusKey();
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+    const enableCriminalRaw = this.config.get<string>('AMIQUS_ENABLE_CRIMINAL_RECORD_STEP')?.trim().toLowerCase();
+    const includeCriminalStep =
+      enableCriminalRaw === 'true' || enableCriminalRaw === '1' || enableCriminalRaw === 'yes';
+
+    const criminalStepTypeConfigured = this.config.get<string>('AMIQUS_DBS_STEP_TYPE')?.trim();
     const criminalStepType =
-      this.config.get<string>('AMIQUS_DBS_STEP_TYPE')?.trim() || AMIQUS_STEP_CRIMINAL_DEFAULT;
+      criminalStepTypeConfigured || AMIQUS_STEP_CRIMINAL_DEFAULT;
     const photoReportType =
-      this.config.get<string>('AMIQUS_PHOTO_ID_REPORT_TYPE')?.trim() || 'biometric';
+      this.config.get<string>('AMIQUS_PHOTO_ID_REPORT_TYPE')?.trim() || 'standard';
     const criminalRegion =
       this.config.get<string>('AMIQUS_CRIMINAL_RECORD_REGION')?.trim() || 'england';
     const criminalCheckType =
@@ -190,23 +207,27 @@ export class ComplianceService {
 
       const photoStep = {
         type: AMIQUS_STEP_PHOTO_ID,
-        preferences: { report_type: photoReportType },
+        preferences: this.amiqusPhotoIdPreferences(photoReportType),
       };
 
-      const criminalStep =
-        criminalStepType === AMIQUS_STEP_CRIMINAL_DEFAULT
-          ? {
-              type: criminalStepType,
-              preferences: {
-                region: criminalRegion,
-                type: criminalCheckType,
-              },
-            }
-          : { type: criminalStepType };
+      const steps: Array<Record<string, unknown>> = [photoStep];
+      if (includeCriminalStep) {
+        const criminalStep =
+          criminalStepType === AMIQUS_STEP_CRIMINAL_DEFAULT
+            ? {
+                type: criminalStepType,
+                preferences: {
+                  region: criminalRegion,
+                  type: criminalCheckType,
+                },
+              }
+            : { type: criminalStepType };
+        steps.push(criminalStep);
+      }
 
       const recordBody: Record<string, unknown> = {
         client: clientId,
-        steps: [photoStep, criminalStep],
+        steps,
         notification: 'email',
         reminder: recordReminder,
       };
