@@ -37,6 +37,7 @@ async function bootstrap() {
       app = await NestFactory.create<NestExpressApplication>(AppModule, {
         logger: ['error', 'warn', 'log'],
         abortOnError: false,
+        rawBody: true,
       });
       console.log('✅ [Bootstrap] NestJS application created');
       console.log('✅ [Bootstrap] All modules initialized successfully');
