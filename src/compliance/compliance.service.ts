@@ -519,53 +519,30 @@ export class ComplianceService {
 
     // --- Manual review by Fariza (record.reviewed) ---
     if (triggerAlias === 'record.reviewed' && recordId != null) {
-      // Fetch the record from Amiqus to get the review_status
-      let reviewStatus: string | undefined;
-      try {
-        const token = this.requireAmiqusKey();
-        const recordRes = await axios.get(`${AMIQUS_BASE}/records/${recordId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          validateStatus: () => true,
-        });
-        if (recordRes.status === 200) {
-          // review_status lives on the record or its steps — try both locations
-          const rec = recordRes.data as Record<string, unknown>;
-          reviewStatus = (rec.review_status as string | undefined)
-            ?? (rec.status as string | undefined);
-          this.logger.log(`Amiqus record ${recordId} review_status=${reviewStatus}`);
-        } else {
-          this.logger.warn(`Amiqus fetch record ${recordId} failed: ${recordRes.status}`);
-        }
-      } catch (e: any) {
-        this.logger.warn(`Amiqus fetch record ${recordId} error: ${e?.message}`);
-      }
+      this.logger.log(`Amiqus record ${recordId} marked as reviewed by reviewer — setting kyc_status=reviewed`);
+      await this.postToPartner(
+        '/api/internal/compliance/update-status',
+        {
+          amiqus_record_id: String(recordId),
+          status: 'reviewed',
+        },
+        'amiqus-webhook-update-status',
+      );
+      return { received: true, recordId, status: 'reviewed' };
+    }
 
-      if (reviewStatus === 'approved') {
-        this.logger.log(`Amiqus record ${recordId} manually approved by reviewer — setting kyc_status=approved`);
-        await this.postToPartner(
-          '/api/internal/compliance/update-status',
-          {
-            amiqus_record_id: String(recordId),
-            status: 'approved',
-          },
-          'amiqus-webhook-update-status',
-        );
-        return { received: true, recordId, status: 'approved' };
-      } else if (reviewStatus === 'rejected') {
-        this.logger.log(`Amiqus record ${recordId} manually rejected by reviewer — setting kyc_status=rejected`);
-        await this.postToPartner(
-          '/api/internal/compliance/update-status',
-          {
-            amiqus_record_id: String(recordId),
-            status: 'rejected',
-          },
-          'amiqus-webhook-update-status',
-        );
-        return { received: true, recordId, status: 'rejected' };
-      } else {
-        this.logger.log(`Amiqus record ${recordId} review_status=${reviewStatus ?? 'unknown'} — no DB update needed`);
-        return { received: true, recordId, status: reviewStatus ?? 'pending' };
-      }
+    // --- Unmark review by Fariza (record.unreviewed) — revert to completed ---
+    if (triggerAlias === 'record.unreviewed' && recordId != null) {
+      this.logger.log(`Amiqus record ${recordId} unmarked as reviewed — reverting kyc_status=completed`);
+      await this.postToPartner(
+        '/api/internal/compliance/update-status',
+        {
+          amiqus_record_id: String(recordId),
+          status: 'completed',
+        },
+        'amiqus-webhook-update-status',
+      );
+      return { received: true, recordId, status: 'completed' };
     }
 
     // All other events (record.created, step.completed, ping, etc.) — acknowledge only
