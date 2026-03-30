@@ -67,7 +67,7 @@ export class ComplianceWebhooksController {
         throw new UnauthorizedException();
       }
 
-      const headerVal = req.headers['x-hub-signature'];
+      const headerVal = req.headers['x-aqid-signature'];
       const sigHeader = Array.isArray(headerVal) ? headerVal[0] : headerVal;
       if (!sigHeader || !/^sha256=/i.test(sigHeader)) {
         throw new UnauthorizedException();
