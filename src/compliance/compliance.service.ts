@@ -531,18 +531,37 @@ export class ComplianceService {
       return { received: true, recordId, status: 'reviewed' };
     }
 
-    // --- Unmark review by Fariza (record.unreviewed) — revert to completed ---
+    // --- Unmark review by Fariza (record.unreviewed) — fetch real status from Amiqus and revert ---
     if (triggerAlias === 'record.unreviewed' && recordId != null) {
-      this.logger.log(`Amiqus record ${recordId} unmarked as reviewed — reverting kyc_status=completed`);
+      let revertStatus = 'completed'; // safe default
+      try {
+        const token = this.requireAmiqusKey();
+        const recordRes = await axios.get(`${AMIQUS_BASE}/records/${recordId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
+        if (recordRes.status === 200) {
+          const amiqusStatus = (recordRes.data as Record<string, unknown>).status as string | undefined;
+          // Map Amiqus status to our DB values
+          if (amiqusStatus === 'complete') revertStatus = 'completed';
+          else if (amiqusStatus === 'pending' || amiqusStatus === 'started') revertStatus = 'pending';
+          else revertStatus = amiqusStatus ?? 'completed';
+          this.logger.log(`Amiqus record ${recordId} unreviewed — amiqus_status=${amiqusStatus} reverting to kyc_status=${revertStatus}`);
+        } else {
+          this.logger.warn(`Amiqus fetch record ${recordId} failed: ${recordRes.status} — defaulting revert to completed`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`Amiqus fetch record ${recordId} error: ${e?.message} — defaulting revert to completed`);
+      }
       await this.postToPartner(
         '/api/internal/compliance/update-status',
         {
           amiqus_record_id: String(recordId),
-          status: 'completed',
+          status: revertStatus,
         },
         'amiqus-webhook-update-status',
       );
-      return { received: true, recordId, status: 'completed' };
+      return { received: true, recordId, status: revertStatus };
     }
 
     // All other events (record.created, step.completed, ping, etc.) — acknowledge only
