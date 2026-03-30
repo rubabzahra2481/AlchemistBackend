@@ -228,7 +228,7 @@ export class ComplianceService {
       const recordBody: Record<string, unknown> = {
         client: clientId,
         steps,
-        notification: 'email',
+        notification: false,
         reminder: recordReminder,
       };
       if (recordClientMessage) {
