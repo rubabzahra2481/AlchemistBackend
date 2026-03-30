@@ -494,9 +494,13 @@ export class ComplianceService {
 
     this.logger.log(`Amiqus webhook recordId=${recordId ?? 'unknown'} trigger=${triggerAlias ?? 'unknown'}`);
 
-    // record.finished = user completed all steps; record.status = status changed
+    // record.finished = user completed all steps
+    // record.reviewed = team member reviewed and approved in Amiqus dashboard
+    // record.status / record.completed = status change events
     const isCompletionEvent =
       triggerAlias === 'record.finished' ||
+      triggerAlias === 'record.reviewed' ||
+      triggerAlias === 'record.approved' ||
       triggerAlias === 'record.status' ||
       triggerAlias === 'record.completed';
 
