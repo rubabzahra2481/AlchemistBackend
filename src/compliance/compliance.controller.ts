@@ -69,19 +69,14 @@ export class ComplianceWebhooksController {
 
       const headerVal = req.headers['x-aqid-signature'];
       const sigHeader = Array.isArray(headerVal) ? headerVal[0] : headerVal;
-      if (!sigHeader || !/^sha256=/i.test(sigHeader)) {
+      if (!sigHeader) {
         throw new UnauthorizedException();
       }
 
-      const providedHex = sigHeader.replace(/^sha256=/i, '').trim();
+      // Amiqus sends a raw base64-encoded HMAC-SHA256 signature (no sha256= prefix)
+      // See: https://developers.amiqus.co/guides/webhooks.html#webhook-security
+      const provided = Buffer.from(sigHeader.trim(), 'base64');
       const expected = createHmac('sha256', secret).update(rawBody).digest();
-      if (
-        providedHex.length !== expected.length * 2 ||
-        !/^[0-9a-f]+$/i.test(providedHex)
-      ) {
-        throw new UnauthorizedException();
-      }
-      const provided = Buffer.from(providedHex, 'hex');
       if (provided.length !== expected.length || !timingSafeEqual(expected, provided)) {
         throw new UnauthorizedException();
       }
