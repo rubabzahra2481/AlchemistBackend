@@ -479,26 +479,61 @@ export class ComplianceService {
   }
 
   /**
-   * Amiqus webhook: when status is completed, log and placeholder DB update for partner KYC/DBS.
+   * Amiqus webhook: extract record ID from data.record.id, use trigger alias to determine
+   * completion, then call Amiqus API to confirm status and update partner backend.
+   *
+   * Official payload structure (from Amiqus docs):
+   * {
+   *   trigger: { alias: "record.finished" | "record.status" | ... },
+   *   data: { record: { id: 123, show: "https://..." } }
+   * }
    */
   async handleAmiqusWebhook(body: Record<string, unknown>): Promise<{ received: boolean; recordId?: number; status?: string }> {
     const recordId = this.extractAmiqusRecordId(body);
-    const status = this.extractAmiqusStatus(body);
+    const triggerAlias = this.extractAmiqusTriggerAlias(body);
 
-    this.logger.log(`Amiqus webhook recordId=${recordId ?? 'unknown'} status=${status ?? 'unknown'}`);
+    this.logger.log(`Amiqus webhook recordId=${recordId ?? 'unknown'} trigger=${triggerAlias ?? 'unknown'}`);
 
-    if (status?.toLowerCase() === 'completed' && recordId != null) {
+    // record.finished = user completed all steps; record.status = status changed
+    const isCompletionEvent =
+      triggerAlias === 'record.finished' ||
+      triggerAlias === 'record.status' ||
+      triggerAlias === 'record.completed';
+
+    if (isCompletionEvent && recordId != null) {
+      // Fetch the actual record status from Amiqus to confirm it is completed
+      let resolvedStatus: string | undefined;
+      try {
+        const token = this.requireAmiqusKey();
+        const recordRes = await axios.get(`${AMIQUS_BASE}/records/${recordId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          validateStatus: () => true,
+        });
+        if (recordRes.status === 200) {
+          resolvedStatus = (recordRes.data as { status?: string })?.status;
+          this.logger.log(`Amiqus record ${recordId} fetched status=${resolvedStatus}`);
+        } else {
+          this.logger.warn(`Amiqus fetch record ${recordId} failed: ${recordRes.status}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`Amiqus fetch record ${recordId} error: ${e?.message}`);
+      }
+
+      const finalStatus = resolvedStatus ?? 'completed';
       await this.postToPartner(
         '/api/internal/compliance/update-status',
         {
           amiqus_record_id: String(recordId),
-          status: 'completed',
+          status: finalStatus,
         },
         'amiqus-webhook-update-status',
       );
+      return { received: true, recordId, status: finalStatus };
     }
 
-    return { received: true, recordId, status };
+    // Non-completion events (record.created, step.completed, ping, etc.) — acknowledge only
+    this.logger.log(`Amiqus webhook trigger=${triggerAlias} recordId=${recordId ?? 'none'} — no action taken`);
+    return { received: true, recordId, status: triggerAlias };
   }
 
   /**
@@ -564,30 +599,31 @@ export class ComplianceService {
   }
 
   private extractAmiqusRecordId(body: Record<string, unknown>): number | undefined {
+    // Official Amiqus payload: { data: { record: { id: 123 } } }
+    const data = body.data as Record<string, unknown> | undefined;
+    if (data) {
+      const inner = data.record as Record<string, unknown> | undefined;
+      if (inner && typeof inner.id === 'number') return inner.id;
+      if (inner && typeof inner.id === 'string' && /^\d+$/.test(inner.id)) return parseInt(inner.id, 10);
+      if (typeof data.record_id === 'number') return data.record_id;
+      if (typeof data.id === 'number') return data.id;
+    }
+    // Fallback: top-level id or record.id
     const direct = body.id;
     if (typeof direct === 'number') return direct;
     if (typeof direct === 'string' && /^\d+$/.test(direct)) return parseInt(direct, 10);
-
     const record = body.record as Record<string, unknown> | undefined;
     if (record && typeof record.id === 'number') return record.id;
-    if (record && typeof record.id === 'string' && /^\d+$/.test(record.id)) return parseInt(record.id, 10);
-
-    const data = body.data as Record<string, unknown> | undefined;
-    if (data) {
-      if (typeof data.record_id === 'number') return data.record_id;
-      if (typeof data.id === 'number') return data.id;
-      const inner = data.record as Record<string, unknown> | undefined;
-      if (inner && typeof inner.id === 'number') return inner.id;
-    }
     return undefined;
   }
 
-  private extractAmiqusStatus(body: Record<string, unknown>): string | undefined {
-    if (typeof body.status === 'string') return body.status;
-    const record = body.record as Record<string, unknown> | undefined;
-    if (record && typeof record.status === 'string') return record.status;
-    const data = body.data as Record<string, unknown> | undefined;
-    if (data && typeof data.status === 'string') return data.status;
+  private extractAmiqusTriggerAlias(body: Record<string, unknown>): string | undefined {
+    // Official Amiqus payload: { trigger: { alias: "record.finished" } }
+    const trigger = body.trigger as Record<string, unknown> | undefined;
+    if (trigger && typeof trigger.alias === 'string') return trigger.alias;
+    // Fallback
+    if (typeof body.event === 'string') return body.event;
+    if (typeof body.type === 'string') return body.type;
     return undefined;
   }
 
