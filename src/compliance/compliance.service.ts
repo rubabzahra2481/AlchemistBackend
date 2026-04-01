@@ -80,7 +80,14 @@ export class ComplianceService {
     }
   }
 
-  private templateIdForContract(contractType: 'HSPSLA' | 'TENANTS'): number {
+  private templateIdForContract(contractType: 'HSPSLA' | 'TENANTS' | 'REFERRAL', override?: number): number {
+    if (contractType === 'REFERRAL') {
+      // Allow caller to pass an explicit templateId; fall back to env var or hardcoded default 3
+      if (override != null && override > 0) return override;
+      const raw = this.config.get<string>('REFERRAL_TEMPLATE_ID')?.trim();
+      const n = parseInt(raw || '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 3;
+    }
     const envKey =
       contractType === 'HSPSLA' ? 'HSPSLA_TEMPLATE_ID' : 'TENANTS_TEMPLATE_ID';
     const raw = this.config.get<string>(envKey)?.trim();
@@ -279,11 +286,68 @@ export class ComplianceService {
   }
 
   /**
-   * DocuSeal: create submission with two submitters; return HSP embed slug.
+   * DocuSeal: create submission.
+   *
+   * - HSPSLA / TENANTS: two-submitter flow (HSP + PMA) with prefilled fields.
+   * - REFERRAL: single-submitter flow — applicant signs the Referral Form.
+   *   Returns { slug, submissionUrl, submissionId }.
    */
-  async initDocuSeal(dto: InitDocuSealDto): Promise<{ slug: string; submissionId?: number }> {
+  async initDocuSeal(dto: InitDocuSealDto): Promise<{ slug: string; submissionUrl?: string; submissionId?: number }> {
     const { apiKey, baseUrl } = this.requireDocusealConfig();
-    const templateId = this.templateIdForContract(dto.contractType);
+
+    // ── REFERRAL fast path ────────────────────────────────────────────────────
+    if (dto.contractType === 'REFERRAL') {
+      if (!dto.applicantEmail) {
+        throw new BadRequestException('applicantEmail is required for REFERRAL contract type');
+      }
+      const templateId = this.templateIdForContract('REFERRAL', dto.templateId);
+      const url = `${baseUrl}/api/submissions`;
+      const payload = {
+        template_id: templateId,
+        send_email: false,
+        submitters: [
+          {
+            role: 'Applicant',
+            email: dto.applicantEmail,
+            send_email: false,
+          },
+        ],
+      };
+      this.logger.log(`DocuSeal REFERRAL submission creating templateId=${templateId} applicant=${dto.applicantEmail}`);
+      try {
+        const res = await axios.post(url, payload, {
+          headers: { 'Content-Type': 'application/json', 'X-Auth-Token': apiKey },
+          validateStatus: () => true,
+        });
+        if (res.status < 200 || res.status >= 300) {
+          this.logger.warn(`DocuSeal REFERRAL submission failed: ${res.status} ${JSON.stringify(res.data)}`);
+          throw new BadGatewayException({ message: 'DocuSeal create referral submission failed', status: res.status, details: res.data });
+        }
+        const submitters = res.data as Array<{ slug?: string; embed_src?: string; submission_id?: number }>;
+        if (!Array.isArray(submitters) || submitters.length === 0) {
+          throw new BadGatewayException('DocuSeal returned an unexpected response for REFERRAL');
+        }
+        const applicant = submitters[0];
+        const slug = applicant.slug ?? '';
+        const submissionId = applicant.submission_id;
+        const submissionUrl = slug ? `${baseUrl}/s/${slug}` : undefined;
+        this.logger.log(`DocuSeal REFERRAL submission created templateId=${templateId} slug=${slug} submissionId=${submissionId}`);
+        if (submissionId != null) {
+          await this.postToPartner(
+            '/api/internal/compliance/link-record',
+            { email: dto.applicantEmail, docuseal_referral_submission_id: String(submissionId) },
+            'docuseal-referral-link-record',
+          );
+        }
+        return { slug, submissionUrl, submissionId };
+      } catch (e) {
+        if (e instanceof BadGatewayException) throw e;
+        this.unwrapAxiosError(e, 'DocuSeal');
+      }
+    }
+
+    // ── HSPSLA / TENANTS two-submitter path ───────────────────────────────────
+    const templateId = this.templateIdForContract(dto.contractType as 'HSPSLA' | 'TENANTS');
     const today = this.formatTodayDdMmYyyy();
 
     // IMPORTANT: DocuSeal field names must match template labels exactly.

@@ -3,8 +3,10 @@ import { Type } from 'class-transformer';
 import {
   IsEmail,
   IsIn,
+  IsInt,
   IsObject,
   IsOptional,
+  IsPositive,
   IsString,
   MaxLength,
   MinLength,
@@ -30,42 +32,72 @@ export class InitAmiqusDto {
   email: string;
 }
 
-export type ContractType = 'HSPSLA' | 'TENANTS';
+export type ContractType = 'HSPSLA' | 'TENANTS' | 'REFERRAL';
 
+/**
+ * Unified DTO for /api/contracts/init-docuseal.
+ *
+ * For HSPSLA / TENANTS: provide hspEmail, hspName, companyName, companyRegNumber,
+ *   registeredAddress, and contractType.
+ *
+ * For REFERRAL: provide applicantEmail and contractType = 'REFERRAL'.
+ *   templateId is optional (defaults to REFERRAL_TEMPLATE_ID env var or 3).
+ */
 export class InitDocuSealDto {
-  @ApiProperty({ example: 'hsp@example.com' })
+  @ApiProperty({ enum: ['HSPSLA', 'TENANTS', 'REFERRAL'] })
+  @IsString()
+  @IsIn(['HSPSLA', 'TENANTS', 'REFERRAL'])
+  contractType: ContractType;
+
+  // ── REFERRAL-only fields ──────────────────────────────────────────────────
+
+  @ApiPropertyOptional({ example: 'applicant@example.com', description: 'Required for REFERRAL contract type' })
+  @IsOptional()
   @IsEmail()
   @MaxLength(320)
-  hspEmail: string;
+  applicantEmail?: string;
 
-  @ApiProperty({ example: 'Jane HSP' })
+  @ApiPropertyOptional({ example: 3, description: 'DocuSeal template ID override (REFERRAL only)' })
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  templateId?: number;
+
+  // ── HSPSLA / TENANTS fields ───────────────────────────────────────────────
+
+  @ApiPropertyOptional({ example: 'hsp@example.com' })
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(320)
+  hspEmail?: string;
+
+  @ApiPropertyOptional({ example: 'Jane HSP' })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(200)
-  hspName: string;
+  hspName?: string;
 
-  @ApiProperty({ example: 'Acme Housing Ltd' })
+  @ApiPropertyOptional({ example: 'Acme Housing Ltd' })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(300)
-  companyName: string;
+  companyName?: string;
 
-  @ApiProperty({ example: '12345678' })
+  @ApiPropertyOptional({ example: '12345678' })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(64)
-  companyRegNumber: string;
+  companyRegNumber?: string;
 
-  @ApiProperty({ example: '1 London Road, London, EC1A 1BB' })
+  @ApiPropertyOptional({ example: '1 London Road, London, EC1A 1BB' })
+  @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(500)
-  registeredAddress: string;
-
-  @ApiProperty({ enum: ['HSPSLA', 'TENANTS'] })
-  @IsString()
-  @IsIn(['HSPSLA', 'TENANTS'])
-  contractType: ContractType;
+  registeredAddress?: string;
 }
 
 /** Optional nested shapes some Amiqus webhook payloads use */
